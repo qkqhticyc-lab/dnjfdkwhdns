@@ -6,3 +6,4 @@ dist/
 CONTINUE.md
 .cache/
 data/*.tmp
+supabase/.temp/

@@ -1,102 +1,60 @@
 # 투자노트
 
-국내·미국 투자자를 위한 시장 화면, 공개 댓글, 회원별 비공개 매매일지입니다. GitHub Pages에 올릴 정적 웹사이트와 Supabase 데이터베이스 설정을 포함합니다.
+공개 사이트: https://qkqhticyc-lab.github.io/dnjfdkwhdns/
 
-## 현재 상태
+## 페이지
 
-- 화면·입력 처리·저장 권한 SQL·자동 게시 워크플로를 준비했습니다.
-- 저장소: https://github.com/qkqhticyc-lab/dnjfdkwhdns
-- 게시 주소: https://qkqhticyc-lab.github.io/dnjfdkwhdns/ (배포 및 HTTP 200 확인)
-- 서울 리전 Supabase DB, GitHub 로그인 제공자와 Pages를 연결했습니다. 설정값은 [SETUP.md](SETUP.md)에 기록했습니다.
-- 연결 전에는 로그인·저장 버튼을 비활성화합니다. 브라우저에만 저장하고 서버 저장으로 표시하지 않습니다.
-- 방문자는 시장 화면과 공개 댓글을 로그인 없이 읽고, GitHub 로그인 후 댓글과 자신의 일지를 작성합니다.
-- 실제 GitHub 로그인·일지 저장·새로고침 후 유지까지 사용자 확인을 완료했습니다.
-- 회원 일지는 직접 작성하는 기록입니다. 기존 한국투자증권 자동 연동은 소유자 전용 Sites 앱에 남아 있고, 이 코드로 이전하지 않았습니다.
+- 시장 현황: index.html — 외국인 코스피·코스닥 현물, K200 선물 수급과 지수 교차차트.
+- 리포트: reports.html — 목표주가 변동, 증권사 실적 리뷰, 해외주식 보고서.
+- 나의 매매일지: 기존 owner-private 계좌 앱으로 현재 탭에서 이동.
+- 의견 나누기: community.html — 수량 없는 공유 매매일지와 글별 댓글.
 
-## 시장 데이터 범위
+공개 페이지의 기존 비공개 일지 입력 화면은 제거했습니다. 기존 investment_entries 테이블은 소유자 RLS를 유지하며 기록을 삭제하거나 자동 공개하지 않습니다.
 
-TradingView 외부 위젯에서 실제 가격이 표시되는 FOREXCOM:NSXUSD, FOREXCOM:SPXUSD, FX_IDC:USDKRW를 확인했습니다. 미국 지수는 **CFD 가격**으로 표시하며 현물 지수와 구분합니다. 제공처의 갱신·시세 지연 정책을 따릅니다.
+## 외국인 수급
 
-코스피·코스닥 지수는 테스트한 위젯에서 제공되지 않았습니다. 현재 국내 지수를 선택하면 네이버페이 증권 원문 링크를 표시합니다. 국내 지수의 사이트 내 자동 갱신은 아직 구현되지 않았으며, 공개 재배포를 허용하는 데이터 제공처 연결이 추가로 필요합니다.
+Supabase market-flow Edge Function이 네이버페이 증권의 공개 투자자별 매매동향과 지수 분봉을 조회합니다. 브라우저는 표시 중 60초마다 갱신하고, 함수는 55초 캐시를 사용합니다. 실패하면 data/market.json의 마지막 저장 자료와 시각을 표시합니다.
 
-위젯은 TradingView 도메인의 별도 iframe에 넣어 회원 세션이 있는 문서에서 외부 차트 스크립트를 실행하지 않습니다. 출처 표시와 직접 열기 링크를 제공합니다.
+현물 순매수 금액은 원 단위를 억원으로 환산하고, 선물 순매수는 계약 수로 표시합니다. KOSPI/KOSDAQ/FUT를 구분하며 수급과 지수가 겹치는 같은 거래일의 정규장 구간만 표시합니다. 두 세로축은 개별 범위이며, 시간 슬라이더와 차트 클릭으로 시점을 확인합니다. 제공처 자료는 잠정치일 수 있습니다.
 
-## 사이트 내 리포트
+콜·풋 수급·미결제약정은 아직 연결하지 않았습니다. 확인되지 않은 옵션 수치를 표시하지 않습니다.
 
-‘판단에 앞서, 확인할 자료’는 외부 사이트 바로가기 대신 실제 보고서 목록을 표시합니다.
+## 공유 일지와 계좌 연결
 
-- 목표주가: 네이버페이 증권 리서치의 종목·증권사·발행일·목표주가·이전 목표주가. 제공처의 해당 증권사 이전 값과 비교하고 값이 없으면 비교 불가로 표시합니다. 다른 증권사 값이나 현재 주가와 섞어 비교하지 않습니다.
-- 실적 발표·리뷰: 국내 보고서 중 실적 리뷰를 분류합니다. 실적 수치는 도입부의 실제 기록·발표 문장에서 확인된 경우에만 표시하고, YoY와 QoQ를 구분합니다. 전망·누적 수치와 뒤쪽 자회사 설명은 추출에서 제외합니다. 이는 증권사 보고서 목록이며 자체 작성한 공시 분석 보고서는 아닙니다.
-- 해외주식: 연합인포맥스 공개 리포트 목록의 국내 증권사 해외 종목·산업·시황 보고서입니다. 종목명·티커·증권사·제목·발행일·원문 PDF를 표시합니다. 원문에서 검증하지 않은 목표가·현재가를 만들어 넣지 않습니다.
-- 날짜·키워드 검색, 분류 필터, 30건씩 더 보기, PC/모바일 화면을 지원합니다. 보고서 제목은 원문으로 연결됩니다.
+공개 사이트에서 GitHub 로그인 → 의견 나누기 → 공개 닉네임 입력 → 자동 공유 연결하기 → 계좌 일지에서 연결 완료하기.
 
-`npm run collect:research`가 최근 7일 범위에서 국내 최대 200건, 해외 최대 200건을 수집해 `data/research.json`을 만듭니다. 시장 전체 보고서 수가 아니라 수집된 범위의 건수입니다. 상세 본문은 처리 중에만 읽고, 공개 파일에는 짧은 제목과 사실 정보만 저장합니다.
+계좌 앱이 URL fragment의 연결 코드를 읽고 주소에서 제거한 뒤 공유할 공개 닉네임을 표시합니다. 본인의 계정인지 확인하고 ‘새 기록 자동 공유 연결’을 누르면 연결됩니다. 코드가 전달되지 않으면 공개 화면의 코드를 복사해 계좌 앱의 ‘공개 투자노트와 연결’에 입력할 수 있습니다. 코드는 비밀번호처럼 취급하고 채팅이나 저장소에 올리지 않습니다.
 
-GitHub Actions는 UTC 매시 17분·47분에 수집→검증된 코드 빌드→Pages 배포를 실행하도록 설정했습니다. 실행 지연이 있을 수 있으며, 공개 저장소가 60일간 활동이 없으면 GitHub에서 예약 실행을 중지할 수 있습니다. [GitHub 예약 실행 안내](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
+공개 데이터는 종목·매수/매도·거래일·매매 이유·복기입니다. 계좌 앱의 서버에서 명시한 필드만 전송하며 수량·체결가격·체결금액·계좌번호·잔고·KIS 키는 전송하지 않습니다. 공개 테이블에도 해당 컬럼이 없습니다.
 
-수집 오류는 이전 성공 자료와 원래 수집 시각을 보존합니다. 일부 상세 조회 실패도 표시합니다. 2시간 이상 갱신이 없으면 화면에 갱신 지연을 표시합니다. 브라우저의 ‘다시 불러오기’는 마지막 배포 자료를 다시 읽습니다. 새 수집을 즉시 실행하려면 저장소 Actions에서 Publish investment note → Run workflow를 사용합니다.
+자동 공유는 연결 이후 새 체결부터 적용합니다. 기존 거래는 연결 시 기준 목록으로만 등록하며 공개하지 않습니다. 같은 날 체결 시각을 확인할 수 없는 과거 거래도 제외합니다. 공유 대상 거래의 복기를 수정하면 공개 글에 반영합니다. 계좌 앱이 열린 동안 기존의 5분 동기화 주기를 사용하며 앱이 닫혀 있으면 KIS 자동 조회도 멈춥니다.
 
-수집 결과 캐시는 `.cache/research`이며 공개 API가 변경되면 수집기 수정이 필요합니다. 사용자의 Supabase 로그인·일지 DB는 수집에 사용하지 않습니다.
+공개 사이트의 journal_share_links에는 연결 코드의 SHA-256 해시만 저장하고 RLS로 본인만 접근합니다. 계좌 앱은 코드를 서버에서 AES-GCM으로 암호화해 보관합니다. journal-sync Edge Function은 이 연결 코드를 검증하며 사용자나 소유자 ID를 외부 입력으로 신뢰하지 않습니다.
 
-## 로컬 실행
+journal_posts는 공개 읽기, 작성자 수정·삭제만 허용합니다. 계좌 연동 표시와 외부 식별자는 클라이언트가 위조할 수 없도록 컬럼 권한을 제한합니다. 계좌 연동 글을 삭제하면 재수집으로 복원되지 않도록 내부 제외 목록을 유지합니다. journal_post_comments는 글별 공개 댓글이며 로그인한 작성자만 추가·삭제할 수 있습니다. 댓글은 분당 5개, 본문 2,000자로 제한합니다.
 
-Node.js 22 이상에서 실행합니다.
+자동 공유 중지 후 기존 공개 글은 개별 삭제할 수 있습니다. 두 서비스는 한 번 연결한 이후에만 새 기록을 전송합니다.
 
-```sh
-npm ci
-npm run build
-npm run preview
-```
+## 리포트 수집
 
-미리보기: http://127.0.0.1:5183/preview/
+scripts/collect-research.mjs가 최근 7일 범위에서 네이버 국내 보고서 최대 200건, 연합인포맥스 해외 보고서 최대 200건을 수집합니다. 국내 목표가는 제공처가 명시한 같은 증권사의 이전 목표가와 비교합니다. 비교 불가 값은 채우지 않습니다. 실적은 증권사 리뷰이며 도입부에서 확인된 실제 영업이익과 YoY만 표시합니다. 전망·누적·자회사 수치는 제외합니다.
 
-## 실제 서비스 연결
+GitHub Actions는 매시 UTC 17분·47분에 리포트·시장 fallback 자료 수집과 Pages 배포를 실행합니다. 시장 화면의 장중 갱신은 이 예약 배포와 별개로 Edge Function을 사용합니다. GitHub 예약 실행은 지연되거나 비활동 정책에 따라 중지될 수 있습니다. 원문 전체나 PDF를 재게시하지 않고 짧은 제목·사실 정보·원문 링크만 저장합니다.
 
-1. 현재 프로젝트는 GitHub와 Supabase 연결이 완료되었습니다. 새 환경으로 복제할 때만 별도 계정을 연결합니다.
-2. 현재 DB에는 supabase/migrations/202610310001_members.sql을 이미 적용했습니다. 다시 실행하지 않습니다. 새 프로젝트를 만들 때만 적용합니다.
-3. Supabase Authentication의 GitHub 제공자를 설정합니다. GitHub OAuth App의 callback은 https://PROJECT_REF.supabase.co/auth/v1/callback 입니다. Client Secret은 Supabase 제공자 설정에만 저장합니다.
-4. 배포 주소를 Supabase Site URL 및 허용 Redirect URL에 등록합니다. 프로젝트 Pages라면 /REPOSITORY/ 경로와 마지막 /까지 일치시킵니다.
-5. site.config.json의 supabase.url과 publishableKey를 채웁니다. publishable/anon 키만 허용하며 service_role 또는 sb_secret_ 키를 넣지 않습니다. authProvider 기본값은 github입니다.
-6. 새 GitHub 저장소의 main에 소스를 올리고 Settings → Pages → Source를 GitHub Actions로 선택합니다. .github/workflows/pages.yml이 dist를 게시합니다.
-7. 실제 로그인, 새로고침 뒤 기록 유지, 서로 다른 두 계정의 데이터 분리, 공개 댓글 조회/삭제를 최종 확인합니다.
+## 개발·검증
 
-GitHub OAuth는 GitHub 계정을 요구합니다. ChatGPT 계정은 회원 기능에 필요하지 않습니다. 기존 소유자 전용 계좌 연동 일지는 별도 인증을 유지합니다. 다른 로그인 제공자로 바꾸려면 해당 제공자와 로그인 버튼 문구도 함께 설정해야 합니다.
+Node 22 이상에서 npm ci, npm test, npm run build, npm run preview를 사용합니다. 미리보기는 http://127.0.0.1:5183/preview/ 입니다.
 
-이메일 로그인은 현재 구현하지 않았습니다. Supabase 기본 이메일 발송 기능만으로 일반 방문자에게 가입 메일을 보낼 수 있다고 가정하지 않습니다. 이메일 방식을 추가하면 별도 SMTP 설정을 확인해야 합니다.
+- npm test: 기존 비공개 권한, 공유 글·댓글 권한, 연결 코드 보호, 민감 컬럼 부재, 삭제 제외 처리, 리포트 수치와 수급 단위·시간 구간 테스트.
+- node tests/pages-browser.mjs: 별도 페이지/현재 탭 이동, 실제 수급 차트, 모바일, 공유 일지·댓글 CRUD, XSS·공개 payload 검증.
+- node tests/research-browser.mjs: 리포트 검색·분류·모바일·오류 보존.
+- PLAYWRIGHT_MODULE과 CHROME_PATH로 브라우저 설치 경로를 지정합니다.
+- TEST_SITE_URL을 지정하면 공개 주소에서도 읽기/모의 API 검증을 실행할 수 있습니다.
 
-## 저장 및 권한
+Supabase migrations는 적용된 초기 파일을 다시 실행하지 않습니다. 새 스키마 변경만 새 migration으로 추가합니다. 서비스 키·KIS 키는 정적 파일에 넣지 않습니다. market-flow는 공개 anon JWT로 호출하고 journal-sync는 서버 간 연결 코드를 직접 검증합니다.
 
-- investment_entries: authenticated 역할만 접근 가능하며 조회·추가·수정·삭제 모두 owner_id = auth.uid()를 데이터베이스 RLS로 강제합니다.
-- investment_comments: 누구나 읽고 로그인한 작성자만 추가·삭제할 수 있습니다. 닉네임·본문·작성 시각과 불투명한 작성자 UUID는 공개 데이터입니다. 이메일은 댓글 테이블에 저장하지 않습니다.
-- 댓글은 2,000자, 매매 이유는 3,000자, 복기는 5,000자까지입니다. 댓글 삽입 시 작성 시각을 서버에서 정하고 최근 1분 동안 남아 있는 댓글이 5개면 추가를 제한합니다.
-- 운영자 삭제는 Supabase 관리 화면에서 가능합니다. 사이트 내 운영자 관리 화면은 아직 없습니다.
-- 표시 및 JSON 내보내기는 최근 매매 500건까지입니다. 댓글은 20개 단위로 추가 조회합니다.
-- 계좌번호, KIS App Key/App Secret, 체결내역은 공개 저장소에 복사하지 않았습니다.
+OAuth 설정값은 SETUP.md에 있습니다. 기본 callback은 프로젝트 Supabase 주소, 돌아오는 주소는 GitHub Pages 기본 경로를 사용하고 로그인 후 원래의 공개 페이지로 복귀합니다.
 
-## 검증
+## 확인 범위
 
-```sh
-node tests/permissions.mjs
-node tests/browser.mjs
-node tests/research-browser.mjs
-npm run check:services
-# 배포된 설정으로 읽기 전용 점검:
-npm run check:services -- https://qkqhticyc-lab.github.io/dnjfdkwhdns/
-```
-
-권한 테스트는 PGlite의 실제 PostgreSQL 엔진에서 SQL을 적용하고 anonymous/회원 A/회원 B 역할로 실행합니다. 테스트용 auth 스키마는 실제 Supabase auth.uid() 동작을 모사합니다. 브라우저 테스트에는 Playwright와 Chrome이 필요합니다. PLAYWRIGHT_MODULE에 설치된 Playwright 모듈 경로, CHROME_PATH에 Chrome 경로를 지정할 수 있습니다. 먼저 로컬 미리보기 서버를 실행합니다.
-
-통과 항목: 익명 비공개 접근 차단, 회원 간 조회·수정·삭제·소유자 위조 차단, 자신의 일지 CRUD, 공개 댓글 권한, 삽입 시각·횟수 제한, PC/390px 레이아웃, 설정 미완료 상태, 모의 API를 통한 일지/댓글 입력과 수정·삭제, HTML 입력의 텍스트 표시, 로그아웃 시 기록 제거.
-
-실제 Supabase DB에서도 tests/remote-permissions.sql로 회원별 CRUD, 다른 회원 접근·소유자 위조 차단, 익명 접근 권한을 검증했고 테스트 데이터는 전부 롤백했습니다. Supabase 보안 advisor 경고는 0건입니다. 공개 API의 댓글 조회와 익명 일지 접근 차단도 확인했습니다.
-
-GitHub Actions는 게시 전에 npm test로 DB 권한 및 리포트 정규화·수치 구분·오류 시 자료 보존 테스트를 실행합니다. check:services는 읽기 전용 설정 점검이며 로그인 성공이나 사용자 데이터의 영속 저장까지 보장하지 않습니다. 실제 계정 로그인·저장·재조회는 사용자 직접 확인을 완료했습니다.
-
-배포 후 실제 브라우저에서도 공개 댓글 조회, 익명 입력 잠금, PC/390px 화면과 JavaScript 오류 없음을 확인했습니다. GitHub 로그인 요청은 올바른 Supabase callback을 포함해 GitHub 인증 페이지로 HTTP 302 이동합니다. 로그인 제공자 활성화 점검도 통과했습니다.
-
-## 참고
-
-- [GitHub Pages 워크플로](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
-- [Supabase GitHub 로그인 설정](https://supabase.com/docs/guides/auth/social-sign-in/auth-github)
-- [Supabase 행 수준 접근 제어](https://supabase.com/docs/guides/database/postgres/row-level-security)
-- [TradingView 위젯](https://www.tradingview.com/widget-docs/)
+실제 GitHub 로그인·수동 저장·새로고침 유지는 사용자 확인을 완료했습니다. 새 자동 공유는 테스트용 연결 코드로 실제 Edge Function의 허용·거부와 저장 컬럼을 검증했고, 계좌 앱의 공개 payload와 신규 거래 기준도 테스트했습니다. 실제 계좌 앱과 GitHub 회원의 연결은 사용자가 위 절차로 한 번 완료해야 합니다.

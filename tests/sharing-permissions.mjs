@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';import {readFile,readdir} from 'node:fs/promises';import {PGlite} from '@electric-sql/pglite';
+const db=new PGlite(),A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
+await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema public,auth to anon,authenticated,service_role;grant execute on function auth.uid() to anon,authenticated,service_role;insert into auth.users values('${A}'),('${B}');`);
+for(const file of(await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort())await db.exec(await readFile('supabase/migrations/'+file,'utf8'));
+async function as(role,id=''){await db.exec(`reset role;set role ${role};select set_config('request.jwt.claim.sub','${id}',false);`);}
+await as('anon');assert.equal((await db.query('select * from journal_posts')).rows.length,0);await assert.rejects(db.query('select * from journal_share_links'),/permission denied/);
+await as('authenticated',A);await db.query(`insert into journal_share_links(token_hash,nickname)values('${'a'.repeat(64)}','A')`);
+const {rows:[post]}=await db.query(`insert into journal_posts(nickname,trade_date,market,symbol,stock_name,side,reason)values('A','2026-11-01','KR','005930','Test','buy','Reason')returning id`);
+await assert.rejects(db.query(`insert into journal_posts(nickname,trade_date,market,symbol,stock_name,side,source)values('A','2026-11-01','KR','005930','Test','buy','account')`),/permission denied/);
+await db.query(`update journal_posts set review='edited' where id='${post.id}'`);
+const {rows:[comment]}=await db.query(`insert into journal_post_comments(post_id,nickname,body)values('${post.id}','A','Comment')returning id`);
+await as('authenticated',B);assert.equal((await db.query('select * from journal_share_links')).rows.length,0);assert.equal((await db.query('select * from journal_posts')).rows.length,1);
+assert.equal((await db.query(`update journal_posts set reason='hijack' where id='${post.id}' returning id`)).rows.length,0);
+assert.equal((await db.query(`delete from journal_posts where id='${post.id}' returning id`)).rows.length,0);
+assert.equal((await db.query(`delete from journal_post_comments where id='${comment.id}' returning id`)).rows.length,0);
+await db.query(`insert into journal_post_comments(post_id,nickname,body)values('${post.id}','B','Second opinion')`);
+await as('anon');assert.equal((await db.query('select * from journal_post_comments')).rows.length,2);await assert.rejects(db.query(`insert into journal_post_comments(post_id,nickname,body)values('${post.id}','Anon','forbidden')`),/permission denied/);
+await as('authenticated',A);await db.query(`delete from journal_posts where id='${post.id}'`);assert.equal((await db.query('select * from journal_post_comments')).rows.length,0);
+await as('service_role');const {rows:[account]}=await db.query(`insert into journal_posts(owner_id,nickname,trade_date,market,symbol,stock_name,side,source,external_id)values('${A}','A','2026-11-01','US','AAPL','Apple','sell','account','${'b'.repeat(64)}')returning id`);
+await as('authenticated',A);await db.query(`delete from journal_posts where id='${account.id}'`);await as('service_role');assert.equal((await db.query('select * from journal_share_suppressions')).rows.length,1);
+await db.exec('reset role');const names=(await db.query("select column_name from information_schema.columns where table_name='journal_posts'")).rows.map(r=>r.column_name);
+for(const field of ['quantity','price','amount','account','balance','app_key'])assert.ok(!names.includes(field));
+await db.close();console.log('PASS: public posts, per-post comments, owner-only writes, private share tokens, account-source forgery denied, no quantity/price/account columns, delete suppression.');
