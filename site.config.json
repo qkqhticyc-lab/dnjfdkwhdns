@@ -1,0 +1,10 @@
+{
+  "title": "투자노트",
+  "description": "시장의 흐름을 읽고, 생각을 나누는 공간",
+  "privateJournalUrl": "https://my-investment-journal-oct31.woodsycat1025.chatgpt.site",
+  "supabase": {
+    "url": "https://lrmevhhdfmpnclomhsmz.supabase.co",
+    "publishableKey": "sb_publishable_TEwqu74jEiUDRh-URG3Itw_zh__zMGK",
+    "authProvider": "github"
+  }
+}

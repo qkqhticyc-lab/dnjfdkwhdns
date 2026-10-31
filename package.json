@@ -1,0 +1,19 @@
+{
+  "name": "public-investment-note",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/permissions.mjs",
+    "check:services": "node scripts/check-services.mjs",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/preview.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.13",
+    "esbuild": "0.28.2"
+  }
+}

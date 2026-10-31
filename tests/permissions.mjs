@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+const db=new PGlite();
+const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
+await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema public,auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;insert into auth.users values ('${A}'),('${B}');`);
+await db.exec(await readFile('supabase/migrations/202610310001_members.sql','utf8'));
+assert.equal((await db.query("select prosecdef from pg_proc where oid='public.prepare_investment_comment()'::regprocedure")).rows[0].prosecdef,false);
+async function as(role,id=''){await db.exec(`reset role;set role ${role};select set_config('request.jwt.claim.sub','${id}',false);`);}
+const entry=`insert into public.investment_entries(trade_date,market,symbol,stock_name,side,quantity,price) values ('2026-10-31','US','AAPL','Apple','buy',2,200) returning id`;
+await as('anon');await assert.rejects(db.query('select * from public.investment_entries'),/permission denied/);await assert.rejects(db.query(entry),/permission denied/);
+await as('authenticated',A);const {rows:[{id}]}=await db.query(entry);assert.equal((await db.query('select * from public.investment_entries')).rows.length,1);
+await as('authenticated',B);assert.equal((await db.query('select * from public.investment_entries')).rows.length,0);
+assert.equal((await db.query(`update public.investment_entries set reason='hijack' where id='${id}' returning id`)).rows.length,0);
+assert.equal((await db.query(`delete from public.investment_entries where id='${id}' returning id`)).rows.length,0);
+await assert.rejects(db.query(`insert into public.investment_entries(owner_id,trade_date,market,symbol,stock_name,side,quantity,price) values ('${A}','2026-10-31','US','MSFT','Microsoft','buy',1,100)`),/row-level security/);
+await as('authenticated',A);await assert.rejects(db.query(`update public.investment_entries set owner_id='${B}' where id='${id}'`),/row-level security/);
+await db.query(`update public.investment_entries set reason='owned edit' where id='${id}'`);assert.equal((await db.query('select reason from public.investment_entries')).rows[0].reason,'owned edit');
+const comment=(await db.query(`insert into public.investment_comments(nickname,body,created_at) values ('A','public thought','2000-01-01') returning id,created_at`)).rows[0];assert.ok(new Date(comment.created_at).getUTCFullYear()>2020);
+for(let i=0;i<4;i++)await db.query(`insert into public.investment_comments(nickname,body) values ('A','another comment')`);
+await assert.rejects(db.query(`insert into public.investment_comments(nickname,body) values ('A','sixth')`),/COMMENT_RATE_LIMIT/);
+await as('anon');assert.equal((await db.query('select * from public.investment_comments')).rows.length,5);await assert.rejects(db.query(`insert into public.investment_comments(nickname,body) values ('anonymous','no')`),/permission denied/);
+await as('authenticated',B);assert.equal((await db.query(`delete from public.investment_comments where id='${comment.id}' returning id`)).rows.length,0);
+await assert.rejects(db.query(`insert into public.investment_comments(owner_id,nickname,body) values ('${A}','fake','bad')`),/Authentication required/);
+await as('authenticated',A);assert.equal((await db.query(`delete from public.investment_comments where id='${comment.id}' returning id`)).rows.length,1);assert.equal((await db.query(`delete from public.investment_entries where id='${id}' returning id`)).rows.length,1);
+await db.close();console.log('PASS: PostgreSQL permissions: anonymous denial, cross-member read/update/delete/insert denial, own CRUD, public comments, ownership, timestamp and rate guard.');
