@@ -8,8 +8,12 @@ await as('authenticated',A);await db.query(`insert into journal_share_links(toke
 const {rows:[post]}=await db.query(`insert into journal_posts(nickname,trade_date,market,symbol,stock_name,side,reason)values('A','2026-11-01','KR','005930','Test','buy','Reason')returning id`);
 await assert.rejects(db.query(`insert into journal_posts(nickname,trade_date,market,symbol,stock_name,side,source)values('A','2026-11-01','KR','005930','Test','buy','account')`),/permission denied/);
 await db.query(`update journal_posts set review='edited' where id='${post.id}'`);
+await db.query(`update journal_posts set trade_price=70000,price_currency='KRW' where id='${post.id}'`);
+await assert.rejects(db.query(`update journal_posts set trade_price=-1 where id='${post.id}'`),/check constraint/);
+await assert.rejects(db.query(`update journal_posts set price_currency='USD' where id='${post.id}'`),/check constraint/);
+await db.query(`insert into journal_posts(nickname,trade_date,market,symbol,stock_name,side,trade_price,price_currency)values('A','2026-11-01','HK','00700','Tencent','buy',450.5,'HKD'),('A','2026-11-01','JP','7203','Toyota','sell',2800,'JPY')`);
 const {rows:[comment]}=await db.query(`insert into journal_post_comments(post_id,nickname,body)values('${post.id}','A','Comment')returning id`);
-await as('authenticated',B);assert.equal((await db.query('select * from journal_share_links')).rows.length,0);assert.equal((await db.query('select * from journal_posts')).rows.length,1);
+await as('authenticated',B);assert.equal((await db.query('select * from journal_share_links')).rows.length,0);assert.equal((await db.query('select * from journal_posts')).rows.length,3);
 assert.equal((await db.query(`update journal_posts set reason='hijack' where id='${post.id}' returning id`)).rows.length,0);
 assert.equal((await db.query(`delete from journal_posts where id='${post.id}' returning id`)).rows.length,0);
 assert.equal((await db.query(`delete from journal_post_comments where id='${comment.id}' returning id`)).rows.length,0);
@@ -20,4 +24,5 @@ await as('service_role');const {rows:[account]}=await db.query(`insert into jour
 await as('authenticated',A);await db.query(`delete from journal_posts where id='${account.id}'`);await as('service_role');assert.equal((await db.query('select * from journal_share_suppressions')).rows.length,1);
 await db.exec('reset role');const names=(await db.query("select column_name from information_schema.columns where table_name='journal_posts'")).rows.map(r=>r.column_name);
 for(const field of ['quantity','price','amount','account','balance','app_key'])assert.ok(!names.includes(field));
-await db.close();console.log('PASS: public posts, per-post comments, owner-only writes, private share tokens, account-source forgery denied, no quantity/price/account columns, delete suppression.');
+assert.ok(names.includes('trade_price')&&names.includes('price_currency'));
+await db.close();console.log('PASS: public posts/comments, owner-only writes, private tokens, source forgery denied, no quantity/total/account, valid trade prices and currencies, HK/JP, delete suppression.');

@@ -1,11 +1,14 @@
 const $=id=>document.getElementById(id);
+import {initStockSearch} from './stock-search.js';
+import {formatTradePrice,marketLabels,defaultCurrencies} from './stock-search-core.mjs';
 function el(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 export function initCommunity(config){
  let client,user,generation=0,offset=0,editing=null;
- const fields='id,owner_id,nickname,trade_date,market,symbol,stock_name,side,reason,review,source,created_at';
+ const stockSearch=initStockSearch(config,$('post-form'));
+ const fields='id,owner_id,nickname,trade_date,market,symbol,stock_name,side,reason,review,source,created_at,trade_price,price_currency';
  const tell=text=>{$('community-status').textContent=text;};
  const failure=()=>tell('처리하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.');
- function reset(){editing=null;$('post-form').reset();$('post-form').elements.trade_date.value=new Date(Date.now()+9*3600000).toISOString().slice(0,10);$('post-save').textContent='매매일지 공개하기';}
+ function reset(){editing=null;$('post-form').reset();$('post-form').elements.trade_date.value=new Date(Date.now()+9*3600000).toISOString().slice(0,10);$('post-save').textContent='매매일지 공개하기';stockSearch.reset();}
  async function comments(post,host){
   host.replaceChildren();const {data,error}=await client.from('journal_post_comments').select('id,owner_id,nickname,body,created_at').eq('post_id',post.id).order('created_at',{ascending:true}).limit(100);if(error)return failure();
   for(const c of data){const node=el('div',null,'comment');node.append(el('b',c.nickname),el('p',c.body),el('small',new Date(c.created_at).toLocaleString('ko-KR')));if(user?.id===c.owner_id){const remove=el('button','내 댓글 삭제');remove.onclick=async()=>{const {error}=await client.from('journal_post_comments').delete().eq('id',c.id);if(error)failure();else comments(post,host);};node.append(remove);}host.append(node);}
@@ -14,17 +17,18 @@ export function initCommunity(config){
  }
  function card(post){
   const node=el('article',null,'panel shared-post'),head=el('div',null,'shared-post-heading');head.append(el('h2',post.stock_name),el('span',post.side==='buy'?'매수':'매도','trade-side '+post.side));node.append(head);
-  node.append(el('p',`${post.nickname} · ${post.trade_date} · ${post.market==='KR'?'국내':'미국'} · ${post.symbol}`,'post-meta'),el('span',post.source==='account'?'계좌 일지 연동':'직접 공유','privacy-badge'));
+  node.append(el('p',`${post.nickname} · ${post.trade_date} · ${marketLabels[post.market]||post.market} · ${post.symbol}`,'post-meta'),el('span',post.source==='account'?'계좌 일지 연동':'직접 공유','privacy-badge'));
+  node.append(el('p',(post.side==='sell'?'매도가 ':'매수가 ')+formatTradePrice(post.trade_price,post.price_currency),'shared-trade-price'));
   if(post.reason)node.append(el('h3','매매 이유'),el('p',post.reason,'post-prose'));
   if(post.review)node.append(el('h3','매매 복기'),el('p',post.review,'post-prose'));
   if(!post.reason&&!post.review)node.append(el('p','매매 이유와 복기는 작성 후 반영됩니다.','source-note'));
-  if(user?.id===post.owner_id){const actions=el('div',null,'entry-actions');if(post.source==='manual'){const edit=el('button','수정');edit.onclick=()=>{editing=post.id;const f=$('post-form');for(const key of ['nickname','trade_date','market','symbol','stock_name','side','reason','review'])f.elements[key].value=post[key]||'';$('post-save').textContent='공유 일지 수정';f.scrollIntoView({behavior:'smooth'});};actions.append(edit);}const remove=el('button','공개 글 삭제');remove.onclick=async()=>{if(!confirm('공개 글과 댓글을 삭제할까요?'))return;const {error}=await client.from('journal_posts').delete().eq('id',post.id);if(error)failure();else load(true);};actions.append(remove);node.append(actions);}
+  if(user?.id===post.owner_id){const actions=el('div',null,'entry-actions');if(post.source==='manual'){const edit=el('button','수정');edit.onclick=()=>{editing=post.id;const f=$('post-form');for(const key of ['nickname','trade_date','market','symbol','stock_name','side','reason','review'])f.elements[key].value=post[key]||'';f.elements.trade_price.value=post.trade_price??'';f.elements.price_currency.value=post.price_currency||defaultCurrencies[post.market];stockSearch.reset();$('post-save').textContent='공유 일지 수정';f.scrollIntoView({behavior:'smooth'});};actions.append(edit);}const remove=el('button','공개 글 삭제');remove.onclick=async()=>{if(!confirm('공개 글과 댓글을 삭제할까요?'))return;const {error}=await client.from('journal_posts').delete().eq('id',post.id);if(error)failure();else load(true);};actions.append(remove);node.append(actions);}
   const open=el('button','댓글 보기 · 의견 남기기'),host=el('div');open.onclick=()=>{open.disabled=true;comments(post,host).finally(()=>{open.disabled=false;});};node.append(open,host);return node;
  }
  async function load(resetFeed=true){if(!client)return;const g=generation;if(resetFeed)offset=0;const {data,error}=await client.from('journal_posts').select(fields).order('created_at',{ascending:false}).range(offset,offset+19);if(g!==generation)return;if(error)return failure();const list=$('shared-posts');if(resetFeed)list.replaceChildren();if(resetFeed&&!data.length)list.append(el('p','아직 공유된 일지가 없습니다. 첫 기록을 나눠보세요.','empty-message'));for(const post of data)list.append(card(post));offset+=data.length;$('posts-more').hidden=data.length<20;}
  reset();$('posts-more').onclick=()=>load(false);
  $('post-cancel').onclick=reset;
- $('post-form').onsubmit=async e=>{e.preventDefault();if(!user)return;const f=new FormData(e.currentTarget),row={};for(const key of ['nickname','trade_date','market','symbol','stock_name','side','reason','review'])row[key]=String(f.get(key)||'').trim();row.symbol=row.symbol.toUpperCase();$('post-save').disabled=true;const {error}=await(editing?client.from('journal_posts').update(row).eq('id',editing):client.from('journal_posts').insert(row));$('post-save').disabled=false;if(error)failure();else{reset();tell('매매일지를 공개했습니다.');load(true);}};
+ $('post-form').onsubmit=async e=>{e.preventDefault();if(!user)return;const f=new FormData(e.currentTarget),row={};for(const key of ['nickname','trade_date','market','symbol','stock_name','side','reason','review','price_currency'])row[key]=String(f.get(key)||'').trim();row.trade_price=Number(f.get('trade_price'));if(!Number.isFinite(row.trade_price)||row.trade_price<=0||row.trade_price>=1e12){tell('매수가 또는 매도가를 확인해 주세요.');return;}row.symbol=row.symbol.toUpperCase();$('post-save').disabled=true;const {error}=await(editing?client.from('journal_posts').update(row).eq('id',editing):client.from('journal_posts').insert(row));$('post-save').disabled=false;if(error)failure();else{reset();tell('매매일지를 공개했습니다.');load(true);}};
  $('link-sharing').onclick=async()=>{
   if(!user)return;const nickname=$('share-nickname').value.trim();if(!nickname){tell('공개할 닉네임을 입력해 주세요.');return;}
   const token=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x=>x.toString(16).padStart(2,'0')).join('');

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/permissions.mjs && node tests/sharing-permissions.mjs && node --test tests/research.test.mjs tests/market.test.mjs",
+    "test": "node tests/permissions.mjs && node tests/sharing-permissions.mjs && node --test tests/research.test.mjs tests/market.test.mjs tests/stock-search.test.mjs",
     "collect:research": "node scripts/collect-research.mjs",
     "check:services": "node scripts/check-services.mjs",
     "build": "node scripts/build.mjs",

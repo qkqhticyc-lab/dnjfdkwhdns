@@ -17,10 +17,13 @@ Deno.serve(async req => {
   if(!Array.isArray(body.posts)||body.posts.length>30)return reply({error:'Invalid batch'},400);
   const owner=links[0],posts=[];
   for(const p of body.posts){
-   if(!/^[0-9a-f]{64}$/.test(p.external_id)||!/^\d{4}-\d{2}-\d{2}$/.test(p.trade_date)||!['KR','US'].includes(p.market)||!['buy','sell'].includes(p.side))return reply({error:'Invalid post'},400);
+   if(!/^[0-9a-f]{64}$/.test(p.external_id)||!/^\d{4}-\d{2}-\d{2}$/.test(p.trade_date)||!['KR','US','HK','JP'].includes(p.market)||!['buy','sell'].includes(p.side))return reply({error:'Invalid post'},400);
    if(typeof p.symbol!=='string'||p.symbol.length<1||p.symbol.length>20||typeof p.stock_name!=='string'||p.stock_name.length<1||p.stock_name.length>80||typeof p.reason!=='string'||p.reason.length>3000||typeof p.review!=='string'||p.review.length>5000)return reply({error:'Invalid post fields'},400);
-   // Explicit allowlist: account, quantity, price, balance, KIS credentials never enter storage.
-   posts.push({owner_id:owner.owner_id,nickname:owner.nickname,source:'account',external_id:p.external_id,trade_date:p.trade_date,market:p.market,symbol:p.symbol,stock_name:p.stock_name,side:p.side,reason:p.reason,review:p.review});
+   const currencies={KR:['KRW'],US:['USD'],HK:['HKD','CNY','USD'],JP:['JPY']} as Record<string,string[]>;
+   if(p.trade_price!=null&&(!Number.isFinite(p.trade_price)||p.trade_price<=0||p.trade_price>=1e12||!currencies[p.market]?.includes(p.price_currency)))return reply({error:'Invalid trade price'},400);
+   if(p.trade_price==null&&p.price_currency!=null)return reply({error:'Price and currency must be provided together'},400);
+   // Explicit allowlist: only unit price; quantity, total amount, account and credentials stay private.
+   posts.push({owner_id:owner.owner_id,nickname:owner.nickname,source:'account',external_id:p.external_id,trade_date:p.trade_date,market:p.market,symbol:p.symbol,stock_name:p.stock_name,side:p.side,reason:p.reason,review:p.review,trade_price:p.trade_price??null,price_currency:p.price_currency??null});
   }
   const suppressed=posts.length?await(await rest('journal_share_suppressions?owner_id=eq.'+owner.owner_id+'&select=external_id')).json():[];
   const omitted=new Set(suppressed.map((r:{external_id:string})=>r.external_id));const allowed=posts.filter(p=>!omitted.has(p.external_id));
