@@ -1,4 +1,6 @@
 import { initMembers } from './members.js';
+import { initResearch } from './research.js';
+initResearch();
 const allowedSymbols=new Set(['FOREXCOM:NSXUSD','FOREXCOM:SPXUSD','KRX:KOSPI','KRX:KOSDAQ','FX_IDC:USDKRW']);
 function widget(id,kind,config){
   const host=document.getElementById(id);host.replaceChildren();

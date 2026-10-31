@@ -4,3 +4,5 @@ outputs/
 node_modules/
 dist/
 CONTINUE.md
+.cache/
+data/*.tmp

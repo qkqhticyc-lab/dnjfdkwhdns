@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/permissions.mjs",
+    "test": "node tests/permissions.mjs && node --test tests/research.test.mjs",
+    "collect:research": "node scripts/collect-research.mjs",
     "check:services": "node scripts/check-services.mjs",
     "build": "node scripts/build.mjs",
     "preview": "node scripts/preview.mjs"
