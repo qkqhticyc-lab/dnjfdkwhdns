@@ -14,9 +14,9 @@ export async function initMarket(config){
   const current=selected==null?points.at(-1):points[Math.min(selected,points.length-1)];
   const before=points.filter(p=>minute(p.time)<=minute(current.time)-30).at(-1),price=prices.filter(p=>p.time<=current.time).at(-1);
   $('flow-net-name').textContent=`외국인 ${active==='FUT'?'K200 선물':' '+m.name+' 현물'} 순매수 누적`;
-  $('flow-net').textContent=`${current.foreignNet>0?'+':''}${number(current.foreignNet,active==='FUT'?0:1)}${m.unit}`;
+  $('flow-net').textContent=`${current.foreignNet>0?'+':''}${number(current.foreignNet,1)}${m.unit}`;
   $('flow-net').className=current.foreignNet>=0?'up':'down';
-  $('flow-delta').textContent=before?`30분 변화 ${current.foreignNet-before.foreignNet>0?'+':''}${number(current.foreignNet-before.foreignNet,active==='FUT'?0:1)}${m.unit}`:'30분 전 수급 자료 없음';
+  $('flow-delta').textContent=before?`30분 변화 ${current.foreignNet-before.foreignNet>0?'+':''}${number(current.foreignNet-before.foreignNet,1)}${m.unit}`:'30분 전 수급 자료 없음';
   $('flow-index-name').textContent=m.name;$('flow-index').textContent=number(price?.price??m.price,2);
   const change=price&&m.previousClose?(price.price/m.previousClose-1)*100:m.changePercent;
   $('flow-index-change').textContent=`전일 대비 ${change>0?'+':''}${number(change,2)}% · ${m.date} 지수 ${price?.time||''}`;

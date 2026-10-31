@@ -6,7 +6,9 @@ try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(base,{waitUntil:'domcontentloaded'});await page.locator('#flow-chart path').first().waitFor();
  assert.equal(await page.locator('iframe').count(),0);assert.equal(await page.locator('#entry-form').count(),0);
- assert.ok((await page.locator('#flow-net').textContent()).includes('계약'));
+ assert.ok((await page.locator('#flow-net').textContent()).includes('억원'));
+ assert.ok(!(await page.locator('#flow-caption').textContent()).includes('계약'));
+ assert.equal(await page.locator('.brand b').textContent(),'부자가 되어보자...');
  await page.locator('[data-flow-market="KOSDAQ"]').click();assert.ok((await page.locator('#flow-net').textContent()).includes('억원'));
  await page.locator('#flow-slider').fill('20');assert.ok((await page.locator('#flow-selection').textContent()).includes('선택'));
  await page.screenshot({path:'outputs/market-flow-desktop.png',fullPage:true});

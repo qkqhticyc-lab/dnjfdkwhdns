@@ -5,7 +5,7 @@ import {initCommunity} from './community.js';
 if(location.hash==='#reading')location.replace('./reports.html');
 if(location.hash==='#community')location.replace('./community.html');
 fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).then(async config=>{
- document.querySelectorAll('[data-title]').forEach(n=>n.textContent=config.title||'투자노트');
+ document.querySelectorAll('[data-title]').forEach(n=>n.textContent=config.title||'부자가 되어보자...');
  const page=document.body.dataset.page;
  const community=page==='community'?initCommunity(config):null;
  await initAuth(config,community?.onSession);
