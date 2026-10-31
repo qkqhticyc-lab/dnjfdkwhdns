@@ -7,11 +7,11 @@ export async function initAuth(config,onSession=()=>{}){
  let initialized=false,lastUser;
  const signin=document.getElementById('signin'),signout=document.getElementById('signout');
  async function update(session){if(signin){signin.disabled=false;signin.hidden=!!session?.user;}if(signout)signout.hidden=!session?.user;if(initialized&&lastUser===session?.user?.id)return;initialized=true;lastUser=session?.user?.id;await onSession(session,client);}
- if(signin)signin.onclick=async()=>{sessionStorage.setItem('investment-return-page',location.pathname.endsWith('community.html')?'community.html':location.pathname.endsWith('reports.html')?'reports.html':'index.html');const {error}=await client.auth.signInWithOAuth({provider:'github',options:{redirectTo:new URL('./',location.href).href}});if(error)alert('로그인 연결을 확인해 주세요.');};
+ if(signin)signin.onclick=async()=>{const page=location.pathname.split('/').pop();sessionStorage.setItem('investment-return-page',['community.html','reports.html','credit.html'].includes(page)?page:'index.html');const {error}=await client.auth.signInWithOAuth({provider:'github',options:{redirectTo:new URL('./',location.href).href}});if(error)alert('로그인 연결을 확인해 주세요.');};
  if(signout)signout.onclick=async()=>{await client.auth.signOut({scope:'local'});};
  client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>update(session),0));
  const {data}=await client.auth.getSession();await update(data.session);
  const next=sessionStorage.getItem('investment-return-page');
- if(data.session&&returnedFromOAuth&&['community.html','reports.html'].includes(next)){sessionStorage.removeItem('investment-return-page');location.replace(new URL(next,location.href));}
+ if(data.session&&returnedFromOAuth&&['community.html','reports.html','credit.html'].includes(next)){sessionStorage.removeItem('investment-return-page');location.replace(new URL(next,location.href));}
  return client;
 }
