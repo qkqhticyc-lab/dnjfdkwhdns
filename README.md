@@ -6,8 +6,8 @@
 
 - 화면·입력 처리·저장 권한 SQL·자동 게시 워크플로를 준비했습니다.
 - 저장소: https://github.com/qkqhticyc-lab/dnjfdkwhdns
-- 게시 주소: https://qkqhticyc-lab.github.io/dnjfdkwhdns/ (최초 Pages 배포 성공 후 접속 가능)
-- 서울 리전 Supabase 프로젝트와 DB를 연결했습니다. 방문자 GitHub OAuth와 Pages 설정은 [SETUP.md](SETUP.md)를 따릅니다.
+- 게시 주소: https://qkqhticyc-lab.github.io/dnjfdkwhdns/ (배포 및 HTTP 200 확인)
+- 서울 리전 Supabase DB, GitHub 로그인 제공자와 Pages를 연결했습니다. 설정값은 [SETUP.md](SETUP.md)에 기록했습니다.
 - 연결 전에는 로그인·저장 버튼을 비활성화합니다. 브라우저에만 저장하고 서버 저장으로 표시하지 않습니다.
 - 방문자는 시장 화면과 공개 댓글을 로그인 없이 읽고, GitHub 로그인 후 댓글과 자신의 일지를 작성합니다.
 - 회원 일지는 직접 작성하는 기록입니다. 기존 한국투자증권 자동 연동은 소유자 전용 Sites 앱에 남아 있고, 이 코드로 이전하지 않았습니다.
@@ -72,6 +72,8 @@ npm run check:services -- https://qkqhticyc-lab.github.io/dnjfdkwhdns/
 실제 Supabase DB에서도 tests/remote-permissions.sql로 회원별 CRUD, 다른 회원 접근·소유자 위조 차단, 익명 접근 권한을 검증했고 테스트 데이터는 전부 롤백했습니다. Supabase 보안 advisor 경고는 0건입니다. 공개 API의 댓글 조회와 익명 일지 접근 차단도 확인했습니다.
 
 GitHub Actions는 게시 전에 npm test로 DB 권한 테스트를 실행합니다. 실제 방문자 OAuth 로그인 및 로그인 뒤 새로고침·재조회는 별도 검증이 필요합니다. check:services는 읽기 전용 설정 점검이며 로그인 성공이나 사용자 데이터의 영속 저장까지 보장하지 않습니다.
+
+배포 후 실제 브라우저에서도 공개 댓글 조회, 익명 입력 잠금, PC/390px 화면과 JavaScript 오류 없음을 확인했습니다. GitHub 로그인 요청은 올바른 Supabase callback을 포함해 GitHub 인증 페이지로 HTTP 302 이동합니다. 로그인 제공자 활성화 점검도 통과했습니다.
 
 ## 참고
 

@@ -18,6 +18,8 @@ DB와 공개 클라이언트 키는 연결되어 있습니다. 아래 두 설정
    - Homepage URL: https://qkqhticyc-lab.github.io/dnjfdkwhdns/
    - Authorization callback URL: https://lrmevhhdfmpnclomhsmz.supabase.co/auth/v1/callback
 2. https://supabase.com/dashboard/project/lrmevhhdfmpnclomhsmz/auth/providers 에서 GitHub 활성화. OAuth App의 Client ID 및 Client Secret 입력 후 저장. Secret은 이 저장소나 채팅에 넣지 않습니다.
+
+   Client ID는 https://github.com/settings/developers 의 해당 OAuth App 상세 화면에서 복사합니다. GitHub 계정명·이메일·저장소 이름을 넣지 않습니다. Client Secret도 같은 앱에서 Generate a new client secret으로 발급한 값을 사용합니다.
 3. https://supabase.com/dashboard/project/lrmevhhdfmpnclomhsmz/auth/url-configuration 에서 Site URL과 Redirect URLs에 아래 값을 설정:
 
    https://qkqhticyc-lab.github.io/dnjfdkwhdns/
@@ -29,6 +31,8 @@ DB와 공개 클라이언트 키는 연결되어 있습니다. 아래 두 설정
 `npm run check:services -- https://qkqhticyc-lab.github.io/dnjfdkwhdns/`로 댓글 조회·익명 일지 차단·GitHub 제공자 활성화 상태를 확인합니다.
 
 게시된 페이지에서 GitHub 로그인 → 매매일지 저장 → 새로고침 후 재조회 → 로그아웃을 확인합니다. 별도 GitHub 계정에서는 첫 계정의 일지가 보이지 않아야 합니다. 공개 댓글은 로그아웃 상태에서도 보여야 합니다.
+
+GitHub 인증 화면으로 이동한 뒤 404가 나면 먼저 OAuth App의 Client ID와 Supabase에 저장한 Client ID가 정확히 일치하는지 확인합니다. 제공자 활성화 검사와 GitHub로의 HTTP 302 이동만으로 OAuth App 설정 전체가 유효하다고 판단할 수 없습니다.
 
 현재 국내 지수는 외부 페이지 링크이고, KIS 자동 가져오기는 기존 소유자 전용 앱에서만 제공합니다.
 
