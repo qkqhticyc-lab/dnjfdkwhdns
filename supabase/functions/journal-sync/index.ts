@@ -12,6 +12,8 @@ Deno.serve(async req => {
   const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))).map(x=>x.toString(16).padStart(2,'0')).join('');
   const links=await(await rest('journal_share_links?token_hash=eq.'+hash+'&enabled=eq.true&select=owner_id,nickname')).json();
   if(links.length!==1)return reply({error:'Share connection revoked or invalid'},401);
+  const settings=await(await rest('journal_site_settings?singleton=eq.true&select=owner_id')).json();
+  if(settings.length!==1||settings[0].owner_id!==links[0].owner_id)return reply({error:'Owner sharing only'},403);
   const text=await req.text();if(text.length>120000)return reply({error:'Payload too large'},413);
   const body=JSON.parse(text);if(body.action==='check')return reply({ok:true,nickname:links[0].nickname});
   if(!Array.isArray(body.posts)||body.posts.length>30)return reply({error:'Invalid batch'},400);
@@ -23,7 +25,7 @@ Deno.serve(async req => {
    if(p.trade_price!=null&&(!Number.isFinite(p.trade_price)||p.trade_price<=0||p.trade_price>=1e12||!currencies[p.market]?.includes(p.price_currency)))return reply({error:'Invalid trade price'},400);
    if(p.trade_price==null&&p.price_currency!=null)return reply({error:'Price and currency must be provided together'},400);
    // Explicit allowlist: only unit price; quantity, total amount, account and credentials stay private.
-   posts.push({owner_id:owner.owner_id,nickname:owner.nickname,source:'account',external_id:p.external_id,trade_date:p.trade_date,market:p.market,symbol:p.symbol,stock_name:p.stock_name,side:p.side,reason:p.reason,review:p.review,trade_price:p.trade_price??null,price_currency:p.price_currency??null});
+   posts.push({owner_id:owner.owner_id,nickname:owner.nickname,board:'featured',source:'account',external_id:p.external_id,trade_date:p.trade_date,market:p.market,symbol:p.symbol,stock_name:p.stock_name,side:p.side,reason:p.reason,review:p.review,trade_price:p.trade_price??null,price_currency:p.price_currency??null});
   }
   const suppressed=posts.length?await(await rest('journal_share_suppressions?owner_id=eq.'+owner.owner_id+'&select=external_id')).json():[];
   const omitted=new Set(suppressed.map((r:{external_id:string})=>r.external_id));const allowed=posts.filter(p=>!omitted.has(p.external_id));

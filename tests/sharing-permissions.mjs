@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';import {readFile,readdir} from 'node:fs/promises';import {PGlite} from '@electric-sql/pglite';
 const db=new PGlite(),A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
-await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema public,auth to anon,authenticated,service_role;grant execute on function auth.uid() to anon,authenticated,service_role;insert into auth.users values('${A}'),('${B}');`);
+await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table auth.identities(user_id uuid references auth.users,provider text,provider_id text);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema public,auth to anon,authenticated,service_role;grant execute on function auth.uid() to anon,authenticated,service_role;insert into auth.users values('${A}'),('${B}');insert into auth.identities values('${A}','github','330951298'),('${B}','github','12345');`);
 for(const file of(await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort())await db.exec(await readFile('supabase/migrations/'+file,'utf8'));
 async function as(role,id=''){await db.exec(`reset role;set role ${role};select set_config('request.jwt.claim.sub','${id}',false);`);}
 await as('anon');assert.equal((await db.query('select * from journal_posts')).rows.length,0);await assert.rejects(db.query('select * from journal_share_links'),/permission denied/);
@@ -25,4 +25,20 @@ await as('authenticated',A);await db.query(`delete from journal_posts where id='
 await db.exec('reset role');const names=(await db.query("select column_name from information_schema.columns where table_name='journal_posts'")).rows.map(r=>r.column_name);
 for(const field of ['quantity','price','amount','account','balance','app_key'])assert.ok(!names.includes(field));
 assert.ok(names.includes('trade_price')&&names.includes('price_currency'));
-await db.close();console.log('PASS: public posts/comments, owner-only writes, private tokens, source forgery denied, no quantity/total/account, valid trade prices and currencies, HK/JP, delete suppression.');
+await as('authenticated',A);const{rows:[featured]}=await db.query(`insert into journal_posts(board,nickname,trade_date,market,symbol,stock_name,side,trade_price,price_currency)values('featured','Owner','2026-11-01','KR','005930','Featured','buy',100,'KRW')returning id`);
+await assert.rejects(db.query(`update journal_posts set entry_price=50 where id='${featured.id}'`),/check constraint/);
+await assert.rejects(db.query(`update journal_posts set board='public' where id='${featured.id}'`),/permission denied/);
+await as('authenticated',B);await db.exec(`select set_config('request.jwt.claim.user_metadata','{"user_name":"qkqhticyc-lab"}',false)`);
+await assert.rejects(db.query(`insert into journal_posts(board,nickname,trade_date,market,symbol,stock_name,side)values('featured','Spoof','2026-11-01','KR','005930','Test','buy')`),/reserved|row-level security/);
+await assert.rejects(db.query(`insert into journal_posts(owner_id,board,nickname,trade_date,market,symbol,stock_name,side)values('${A}','featured','Spoof','2026-11-01','KR','005930','Test','buy')`),/permission denied/);
+await assert.rejects(db.query(`insert into journal_share_links(token_hash,nickname)values('${'d'.repeat(64)}','B')`),/row-level security/);
+await assert.rejects(db.query(`update journal_site_settings set owner_id='${B}'`),/permission denied/);
+assert.equal((await db.query(`update journal_posts set reason='forged' where id='${featured.id}' returning id`)).rows.length,0);
+await db.query(`insert into journal_post_comments(post_id,nickname,body)values('${featured.id}','B','Anyone may comment on owner journal')`);
+await db.query(`insert into journal_posts(board,nickname,trade_date,market,symbol,stock_name,side,trade_price,price_currency,entry_price)values('public','B','2026-11-01','US','AAPL','Public','sell',120,'USD',100)`);
+await as('anon');assert.equal((await db.query(`select * from journal_posts where board='featured'`)).rows.length,1);assert.ok((await db.query(`select * from journal_posts where board='public'`)).rows.length>0);
+await as('service_role');await assert.rejects(db.query(`insert into journal_posts(owner_id,board,nickname,trade_date,market,symbol,stock_name,side)values('${B}','featured','No spoof','2026-11-01','US','AAPL','Test','buy')`),/reserved/);
+await db.query(`insert into journal_posts(owner_id,board,nickname,trade_date,market,symbol,stock_name,side,source,external_id,trade_price,price_currency,entry_price)values('${A}','featured','Owner','2026-11-01','US','AAPL','Account','sell','account','${'e'.repeat(64)}',120,'USD',100)`);
+await db.query(`insert into journal_posts(owner_id,board,nickname,trade_date,market,symbol,stock_name,side,source,external_id,trade_price,price_currency)values('${A}','featured','Owner','2026-11-01','US','AAPL','Account','sell','account','${'e'.repeat(64)}',125,'USD')on conflict(owner_id,external_id)do update set trade_price=excluded.trade_price`);
+assert.equal(Number((await db.query(`select entry_price from journal_posts where external_id='${'e'.repeat(64)}'`)).rows[0].entry_price),100);
+await db.close();console.log('PASS: board separation, verified owner-only featured/sharing/settings, public member writes, everyone comments, anti-impersonation, immutable boards, safe prices/basis, account basis preservation, privacy and deletion.');

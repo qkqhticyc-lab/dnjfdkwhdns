@@ -5,10 +5,12 @@ import {initCommunity} from './community.js';
 import {initCredit} from './credit.js';
 import {initIndicators} from './indicators.js';
 import {initCharts} from './charts.js';
+import {initNavigation} from './navigation.js';
 if(location.hash==='#reading')location.replace('./reports.html');
 if(location.hash==='#community')location.replace('./community.html');
 fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).then(async config=>{
  document.querySelectorAll('[data-title]').forEach(n=>n.textContent=config.title||'부자가 되어보자...');
+ initNavigation(config);
  const page=document.body.dataset.page;
  const community=page==='community'?initCommunity(config):null;
  await initAuth(config,community?.onSession);
