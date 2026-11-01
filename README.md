@@ -6,11 +6,22 @@
 
 - 시장 현황: index.html — 외국인 코스피·코스닥 현물, K200 선물 수급과 지수 교차차트.
 - 신용잔고: credit.html — 고객예탁금·시장 전체 신용융자 잔고·동일 제공일의 신용융자/예탁금 비율.
+- 차트: charts.html — 한국·미국·홍콩·일본 종목 검색, 일봉 가격과 시장 거래량, CSV.
 - 리포트: reports.html — 목표주가 변동, 증권사 실적 리뷰, 해외주식 보고서.
 - 나의 매매일지: 기존 owner-private 계좌 앱으로 현재 탭에서 이동.
 - 의견 나누기: community.html — 수량 없는 공유 매매일지와 글별 댓글.
 
 공개 페이지의 기존 비공개 일지 입력 화면은 제거했습니다. 기존 investment_entries 테이블은 소유자 RLS를 유지하며 기록을 삭제하거나 자동 공개하지 않습니다.
+
+## 주요 지표와 종목 차트
+
+시장 현황의 수급 위에 미국 10년물 금리 / 코스피 / 코스닥 / 나스닥 / 다우 / S&P 500 / VIX / WTI / 브렌트 / 골드 / 실버 / 구리 순서로 12개 카드를 표시합니다. Yahoo Finance 일별 가격의 최근값과 같은 계열의 직전 제공일·1주/1개월/3개월 비교, 3개월 추이와 범위를 제공합니다. 금리 수준은 %이고 변화는 bp, 원유는 USD/배럴, 금·은은 USD/트로이온스, 구리는 USD/파운드입니다. 원자재는 근월물 연속 선물 시세이며 롤오버 영향이 있습니다.
+
+scripts/collect-indicators.mjs가 기존 30분 Pages 예약 실행에서 data/indicators.json을 갱신합니다. 차트 범위의 첫 기준값인 Yahoo chartPreviousClose나 현재 quote 메타데이터를 전일 종가로 잘못 쓰지 않고, 일별 bar의 마지막 두 값을 비교합니다. 제공처 수집 실패는 마지막 정상 카드의 원래 날짜/시각과 함께 stale로 유지하며 0을 만들지 않습니다. 서버의 Yahoo 요청은 HTTP429로 제한돼 브라우저는 정기 수집 스냅샷을 읽습니다. 실시간 무지연 시세라고 표시하지 않습니다.
+
+charts.html은 기존 종목 검색을 이용하며, 별도 stock-chart Edge Function이 입력 시장·코드·통화를 검증하고 네이버 검색 결과의 국가/코드가 정확히 일치하는 Reuters 식별자를 조회합니다. 국내·해외 /chart/{domestic|foreign}/item/{code}/day?startDateTime=...&endDateTime=...에서 실제 일봉 OHLCV를 수집합니다. Naver periodType=year 요약은 주봉이므로 일봉으로 쓰지 않습니다. HK 선행 0·통화 카운터·ADR·거래소를 구분하며 서로 다른 종목의 자료로 대체하지 않습니다.
+
+캔들/종가 선, 1·3·6개월/1·2년, 날짜 슬라이더/마우스 조회, CSV(누락 값은 빈 셀)를 지원합니다. 거래량은 공개 시장 주식/ETF 좌수이고 사용자 계좌 수량과 무관합니다. 누락 OHLC/거래량은 생성하지 않습니다. 종목 변경 실패 시 이전 종목 차트를 비우며 같은 종목의 갱신 실패 시 기존 종목/기간을 유지합니다. 로그인 없이 조회, 5분 캐시와 같은 요청 병합, 게이트웨이 JWT 검증을 유지합니다. 새 개인 데이터/DB 테이블은 없습니다.
 
 ## 외국인 수급
 
@@ -63,6 +74,7 @@ Node 22 이상에서 npm ci, npm test, npm run build, npm run preview를 사용�
 - node tests/research-browser.mjs: 리포트 검색·분류·모바일·오류 보존.
 - node tests/stock-search-browser.mjs: 실제 4개국 검색·코드/통화 자동 입력·매수/매도 단가 저장/수정·모바일·검색 실패 대체 입력.
 - node tests/credit-browser.mjs: 실제 일별 자료·세 차트·금액/비율·기간/날짜·모바일 축 가독성·현재 탭 이동·오류와 이전 자료 보존.
+- node tests/charts-browser.mjs: 실제 12개 지표 순서·단위·수급 위 배치, 4개국 실차트/거래량, 기간/날짜/캔들/선/CSV, 모바일, 다른 종목 자료 혼동 방지.
 - PLAYWRIGHT_MODULE과 CHROME_PATH로 브라우저 설치 경로를 지정합니다.
 - TEST_SITE_URL을 지정하면 공개 주소에서도 읽기/모의 API 검증을 실행할 수 있습니다.
 
