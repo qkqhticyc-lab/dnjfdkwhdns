@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/permissions.mjs && node tests/sharing-permissions.mjs && node --test tests/research.test.mjs tests/market.test.mjs tests/stock-search.test.mjs tests/credit.test.mjs tests/quotes.test.mjs tests/journal-returns.test.mjs tests/sentiment.test.mjs tests/technical.test.mjs",
+    "test": "node tests/permissions.mjs && node tests/sharing-permissions.mjs && node --test tests/research.test.mjs tests/market.test.mjs tests/stock-search.test.mjs tests/credit.test.mjs tests/quotes.test.mjs tests/journal-returns.test.mjs tests/sentiment.test.mjs tests/technical.test.mjs tests/etf.test.mjs",
     "collect:credit": "node scripts/collect-credit.mjs",
     "collect:indicators": "node scripts/collect-indicators.mjs",
     "collect:sentiment": "node scripts/collect-sentiment.mjs",
     "collect:research": "node scripts/collect-research.mjs",
     "check:services": "node scripts/check-services.mjs",
     "build": "node scripts/build.mjs",
-    "preview": "node scripts/preview.mjs"
+    "preview": "node scripts/preview.mjs",
+    "collect:etfs": "node scripts/collect-etfs.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0"
