@@ -1,0 +1,1 @@
+import{copyFile}from'node:fs/promises';for(const name of['quotes-core.mjs','technical-core.mjs','stock-analysis-core.mjs'])await copyFile(name,'supabase/functions/stock-analysis/'+name);console.log('Synced analysis function modules.');
