@@ -30,7 +30,7 @@ DB·공개 클라이언트 키·게시·GitHub 로그인 설정은 완료되어 
 
 `npm run check:services -- https://qkqhticyc-lab.github.io/dnjfdkwhdns/`로 댓글 조회·익명 일지 차단·GitHub 제공자 활성화 상태를 확인합니다.
 
-게시된 페이지에서 GitHub 로그인 → 본인에게 허용된 게시판에 일지 저장 → 새로고침 후 재조회 → 로그아웃을 확인합니다. 공개 일지와 댓글은 다른 회원/비로그인도 읽을 수 있고, 수정/삭제는 작성자만 가능합니다. ‘나의 매매일지’ 작성과 계좌 공유 연결은 운영자만, ‘당신들의 매매일지’ 작성은 회원 누구나 가능합니다. 두 페이지 모두 회원 누구나 댓글을 쓸 수 있습니다. 기존 비공개 investment_entries는 계속 회원별 RLS로 보호합니다.
+게시된 페이지에서 GitHub 로그인 → 본인에게 허용된 게시판에 일지 저장 → 새로고침 후 재조회 → 로그아웃을 확인합니다. 공개 일지와 댓글은 다른 회원/비로그인도 읽을 수 있고, 일지 수정/삭제는 작성자만 가능합니다. ‘나의 매매일지’ 작성과 계좌 공유 연결은 운영자만, ‘당신들의 매매일지’ 작성은 회원 누구나 가능합니다. 두 페이지 모두 로그인 없이 댓글을 쓸 수 있습니다. 비회원 댓글은 작성 브라우저의 삭제 토큰으로 삭제하며 운영자도 비회원 댓글을 관리할 수 있습니다. journal-guest-comment는 게이트웨이 JWT 검증을 유지하고 공개 anon JWT로 호출합니다. create_guest_journal_comment/delete_guest_journal_comment RPC는 service_role만 실행합니다. 기존 비공개 investment_entries는 계속 회원별 RLS로 보호합니다.
 
 GitHub 인증 화면으로 이동한 뒤 404가 나면 먼저 OAuth App의 Client ID와 Supabase에 저장한 Client ID가 정확히 일치하는지 확인합니다. 제공자 활성화 검사와 GitHub로의 HTTP 302 이동만으로 OAuth App 설정 전체가 유효하다고 판단할 수 없습니다.
 

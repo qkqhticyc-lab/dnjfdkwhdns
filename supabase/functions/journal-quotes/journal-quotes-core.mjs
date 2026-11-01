@@ -1,5 +1,5 @@
 const markets={KR:{nation:'KOR',currency:'KRW'},US:{nation:'USA',currency:'USD'},HK:{nation:'HKG',currency:'HKD'},JP:{nation:'JPN',currency:'JPY'}};
-export function validQuoteItem(item){return !!item&&!!markets[item.market]&&typeof item.symbol==='string'&&({KR:/^\d{6}$/,US:/^[A-Z][A-Z0-9.-]{0,19}$/,HK:/^\d{4,5}$/,JP:/^[A-Z0-9]{4,5}$/}[item.market]).test(item.symbol)&&(!item.currency||({KR:['KRW'],US:['USD'],HK:['HKD','CNY','USD'],JP:['JPY']}[item.market]).includes(item.currency));}
+export function validQuoteItem(item){return !!item&&!!markets[item.market]&&typeof item.symbol==='string'&&({KR:/^[0-9A-Z]{6}$/,US:/^[A-Z][A-Z0-9.-]{0,19}$/,HK:/^\d{4,5}$/,JP:/^[A-Z0-9]{4,5}$/}[item.market]).test(item.symbol)&&(!item.currency||({KR:['KRW'],US:['USD'],HK:['HKD','CNY','USD'],JP:['JPY']}[item.market]).includes(item.currency));}
 export async function getJournalQuote(request,fetcher=fetch){
  if(!validQuoteItem(request))throw Error('Invalid quote request');
  const {market,symbol}=request,definition=markets[market];

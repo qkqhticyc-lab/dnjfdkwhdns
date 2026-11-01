@@ -45,7 +45,7 @@ export async function collectIndicators(fetcher=fetch,now=new Date()){
 }
 export function chartSymbols(market,symbol,exchange=''){
  if(typeof symbol!=='string'||symbol.length>20)throw Error('Invalid symbol');
- if(market==='KR'&&/^\d{6}$/.test(symbol)){const suffix=/코스닥|KOSDAQ/i.test(exchange)?['KQ']:/코스피|KOSPI/i.test(exchange)?['KS']:['KS','KQ'];return suffix.map(s=>symbol+'.'+s);}
+ if(market==='KR'&&/^[0-9A-Z]{6}$/.test(symbol)){const suffix=/코스닥|KOSDAQ/i.test(exchange)?['KQ']:/코스피|KOSPI/i.test(exchange)?['KS']:['KS','KQ'];return suffix.map(s=>symbol+'.'+s);}
  if(market==='US'&&/^[A-Z][A-Z0-9.-]{0,19}$/.test(symbol))return[symbol.replaceAll('.','-')];
  if(market==='HK'&&/^\d{4,5}$/.test(symbol))return[symbol.replace(/^0+(?=\d{4})/,'')+'.HK'];
  if(market==='JP'&&/^[A-Z0-9]{4,5}$/.test(symbol))return[symbol+'.T'];
