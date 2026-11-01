@@ -6,6 +6,7 @@ import {initCredit} from './credit.js';
 import {initIndicators} from './indicators.js';
 import {initCharts} from './charts.js';
 import {initNavigation} from './navigation.js';
+import {initSentiment} from './sentiment.js';
 if(location.hash==='#reading')location.replace('./reports.html');
 if(location.hash==='#community')location.replace('./community.html');
 fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).then(async config=>{
@@ -14,7 +15,7 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  const page=document.body.dataset.page;
  const community=page==='community'?initCommunity(config):null;
  await initAuth(config,community?.onSession);
- if(page==='market')await Promise.all([initMarket(config),initIndicators()]);
+ if(page==='market')await Promise.all([initMarket(config),initIndicators(),initSentiment()]);
  if(page==='reports')await initResearch();
  if(page==='credit')await initCredit();
  if(page==='charts')await initCharts(config);

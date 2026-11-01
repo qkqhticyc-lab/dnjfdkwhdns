@@ -1,0 +1,4 @@
+import{collectSentiment,mergeSentiment,validateSentimentData}from'../sentiment-core.mjs';import{readFile,writeFile}from'node:fs/promises';
+const next=await collectSentiment();let previous;try{const local=JSON.parse(await readFile('data/sentiment.json','utf8'));if(validateSentimentData(local))previous=local;}catch{}
+try{const r=await fetch('https://qkqhticyc-lab.github.io/dnjfdkwhdns/data/sentiment.json',{signal:AbortSignal.timeout(10000)});if(r.ok){const live=await r.json();if(validateSentimentData(live)&&(!previous||live.collectedAt>previous.collectedAt))previous=live;}}catch{}
+const result=mergeSentiment(next,previous);if(!validateSentimentData(result))throw Error('Invalid sentiment data');await writeFile('data/sentiment.json',JSON.stringify(result));console.log('Sentiment',result.items.map(p=>p.id+':'+p.status).join(', '));
