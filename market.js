@@ -3,12 +3,18 @@ const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.te
 const number=(v,d=0)=>Number.isFinite(v)?new Intl.NumberFormat('ko-KR',{maximumFractionDigits:d}).format(v):'—';
 const minute=t=>Number(t.slice(0,2))*60+Number(t.slice(3,5));
 export async function initMarket(config){
- let payload,active='FUT',busy=false,selected=null;
+ let payload={markets:{}},active='FUT',selected=null,options;const pending=new Map();let optionsBusy=false;
+ const headers={apikey:config.supabase.publishableKey,Authorization:'Bearer '+config.supabase.edgeAnonKey};
  function svg(tag,attrs={},text){const n=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);if(text!=null)n.textContent=text;return n;}
  function draw(){
   const m=payload?.markets?.[active],host=$('flow-chart');host.replaceChildren();
   document.querySelectorAll('[data-flow-market]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.flowMarket===active)));
-  if(!['ok','stale'].includes(m?.status)){host.append(el('p','현재 제공처의 수급 자료를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.','research-empty'));return;}
+  $('flow-refresh').disabled=pending.has(active);
+  $('flow-updated').textContent=m?.collectedAt?`조회 ${new Date(m.collectedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} KST · 접속 중 30초마다 확인`:'';
+  const old=m?.status==='stale'||(m?.collectedAt&&Date.now()-Date.parse(m.collectedAt)>90000);
+  $('flow-warning').hidden=!old;$('flow-warning').textContent='최신 조회가 지연되어 이전 자료를 표시합니다. 차트의 거래일·시간을 확인해 주세요.';
+  if(!['ok','stale'].includes(m?.status)||!m.points?.length||!m.prices?.length){for(const id of ['flow-net','flow-index'])$(id).textContent='—';for(const id of ['flow-delta','flow-index-change','flow-selection'])$(id).textContent='';$('flow-caption').textContent='';$('flow-slider').disabled=true;host.append(el('p',pending.has(active)?'선택한 시장의 수급을 확인하고 있습니다.':'현재 제공처의 수급 자료를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.','research-empty'));return;}
+  $('flow-slider').disabled=false;
   const points=m.points,first=minute(points[0].time),last=minute(points.at(-1).time),prices=m.prices.filter(p=>minute(p.time)>=first&&minute(p.time)<=last);
   if(!prices.length){host.append(el('p','같은 시간대의 지수 자료가 없습니다.','research-empty'));return;}
   const current=selected==null?points.at(-1):points[Math.min(selected,points.length-1)];
@@ -36,11 +42,15 @@ export async function initMarket(config){
   chart.onclick=e=>{const bounds=chart.getBoundingClientRect(),at=first+((e.clientX-bounds.left)/bounds.width*W-left)/(right-left)*(last-first);selected=points.reduce((best,p,i)=>Math.abs(minute(p.time)-at)<Math.abs(minute(points[best].time)-at)?i:best,0);draw();};
   host.append(chart);const slider=$('flow-slider');slider.max=String(points.length-1);slider.value=String(selected??points.length-1);slider.oninput=()=>{selected=Number(slider.value);draw();};
  }
- async function load(){if(busy)return;busy=true;$('flow-refresh').disabled=true;let live=false;
-  try{const headers={apikey:config.supabase.publishableKey,Authorization:'Bearer '+config.supabase.edgeAnonKey};const r=await fetch(config.supabase.url+'/functions/v1/market-flow',{headers,cache:'no-store'});if(!r.ok)throw Error();const d=await r.json();if(!Object.values(d.markets||{}).some(m=>m.status==='ok'))throw Error();payload=d;live=true;}catch{if(!payload){try{const r=await fetch('./data/market.json');if(r.ok)payload=await r.json();}catch{}}}
-  $('flow-updated').textContent=payload?`${live?'수집':'마지막 저장 자료'} ${new Date(payload.collectedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} KST · 접속 중 1분마다 확인`:'수급 자료를 불러오지 못했습니다.';
-  $('flow-warning').hidden=live;$('flow-warning').textContent='실시간 제공처 연결이 지연되어 마지막 저장 자료를 표시합니다.';draw();busy=false;$('flow-refresh').disabled=false;
+ function accept(code,m,collectedAt){if(!['ok','stale'].includes(m?.status)||!m.points?.length||!m.prices?.length||m.unit!=='억원'||m.measure!=='netAmount')return false;const old=payload.markets[code],stamp=m.date+m.points.at(-1).time,oldStamp=old?.date+(old?.points?.at(-1)?.time||'');if(old&&stamp<oldStamp)return false;payload.markets[code]={...m,collectedAt:m.collectedAt||collectedAt};return true;}
+ async function load(code=active){if(pending.has(code))return pending.get(code);
+  const promise=(async()=>{try{const r=await fetch(config.supabase.url+'/functions/v1/market-flow?market='+code,{headers,cache:'no-store',signal:AbortSignal.timeout(16000)});if(!r.ok)throw Error();const d=await r.json();if(!accept(code,d.markets?.[code],d.collectedAt))throw Error();}catch{if(payload.markets[code])payload.markets[code].status='stale';}finally{pending.delete(code);if(code===active)draw();}})();pending.set(code,promise);if(code===active)draw();return promise;
  }
- document.querySelectorAll('[data-flow-market]').forEach(b=>b.onclick=()=>{active=b.dataset.flowMarket;selected=null;draw();});$('flow-refresh').onclick=load;
- await load();setInterval(()=>{if(!document.hidden)load();},60000);
+ function drawOptions(){const host=$('options-data');host.replaceChildren();if(!['ok','stale'].includes(options?.status)){host.append(el('p','콜·풋 수급을 불러오지 못했습니다. 다음 자동 갱신 때 다시 확인합니다.'));return;}const table=el('table'),caption=el('caption','KOSPI200 옵션 투자자별 누적 순매수 · 억원'),head=el('thead'),tr=el('tr');for(const name of ['시장','외국인','개인','기관']){const th=el('th',name);th.scope='col';tr.append(th);}head.append(tr);table.append(caption,head);const body=el('tbody');for(const item of options.items){const row=el('tr'),th=el('th',item.code==='CALL'?'콜옵션':'풋옵션');th.scope='row';row.append(th);for(const k of ['foreignNet','personalNet','institutionNet'])row.append(el('td',(item[k]>0?'+':'')+number(item[k],2),item[k]>=0?'up':'down'));body.append(row);}table.append(body);host.append(table,el('p',(options.status==='stale'?'이전 조회 자료 · ':'')+options.message,'research-footnote'));const link=el('a','대신증권 원자료 ↗');link.href=options.source;link.target='_blank';link.rel='noopener noreferrer';host.append(link,el('p',`조회 ${new Date(options.collectedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} KST · 1분마다 확인 · 조회 시각은 거래 시각이 아닙니다.`,'research-footnote'));}
+ async function loadOptions(){if(optionsBusy)return;optionsBusy=true;try{const r=await fetch(config.supabase.url+'/functions/v1/market-flow?options=1',{headers,cache:'no-store',signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error();const d=await r.json();if(!['ok','stale'].includes(d.status)||d.items?.length!==2||d.items.some(i=>!['CALL','PUT'].includes(i.code)||!Number.isFinite(i.foreignNet)))throw Error();options=d;}catch{if(options)options.status='stale';}finally{optionsBusy=false;drawOptions();}}
+ document.querySelectorAll('[data-flow-market]').forEach(b=>b.onclick=()=>{active=b.dataset.flowMarket;selected=null;draw();load(active);});$('flow-refresh').onclick=()=>{load(active);loadOptions();};
+ // Paint the saved chart independently of the live request. It is always labeled with its own timestamp.
+ const snapshot=fetch('./data/market.json',{signal:AbortSignal.timeout(5000)}).then(r=>r.json()).then(d=>{for(const [code,m]of Object.entries(d.markets||{}))if(!payload.markets[code])accept(code,{...m,status:'stale'},d.collectedAt);draw();}).catch(()=>{});
+ await Promise.all([load(),loadOptions(),snapshot]);setInterval(()=>{if(!document.hidden)load();},30000);setInterval(()=>{if(!document.hidden)loadOptions();},60000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden){load();loadOptions();}});
 }

@@ -15,8 +15,10 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  initNavigation(config);
  const page=document.body.dataset.page;
  const community=page==='community'?initCommunity(config):null;
+ // Public market data starts independently of account/session initialization.
+ const market=page==='market'?Promise.all([initMarket(config),initIndicators(config),initSentiment()]):null;
  await initAuth(config,community?.onSession);
- if(page==='market')await Promise.all([initMarket(config),initIndicators(),initSentiment()]);
+ if(market)await market;
  if(page==='reports')await initResearch();
  if(page==='credit')await initCredit();
  if(page==='charts')await initCharts(config);

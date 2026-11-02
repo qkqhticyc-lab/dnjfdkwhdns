@@ -8,21 +8,23 @@ export function foreignNetAmount(code, row) {
   }
   const net=num(row?.diffValue);return net==null?null:net/1e8;
 }
-export async function collectMarket(fetcher = fetch) {
+export async function collectMarket(fetcher = fetch, codes = MARKETS) {
+  if (!codes.length || codes.some(c=>!MARKETS.includes(c))) throw Error('Invalid market');
   const now = new Date().toISOString();
   const day = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10).replaceAll('-', '');
-  async function get(url) { const r = await fetcher(url, { signal: AbortSignal.timeout(12000) }); if (!r.ok) throw Error(`Source HTTP ${r.status}`); return r.json(); }
+  async function get(url) { const r = await fetcher(url, { signal: AbortSignal.timeout(6500) }); if (!r.ok) throw Error(`Source HTTP ${r.status}`); return r.json(); }
   const markets = {};
-  for (const code of MARKETS) {
+  await Promise.all(codes.map(async code => {
     try {
       const [basic, chart] = await Promise.all([get(`https://m.stock.naver.com/api/index/${code}/basic`), get(`https://api.stock.naver.com/chart/domestic/index/${code}?periodType=day`)]);
       if (!Array.isArray(chart.priceInfos) || !/^\d{8}$/.test(chart.tradeBaseAt)) throw Error('Invalid index response');
-      const records = [];
-      for (let startIdx = 0; startIdx < 4; startIdx++) {
-        const data = await get(`https://stock.naver.com/api/domestic/market/trend/time?tradeType=KRX&marketType=${code}&bizdate=${chart.tradeBaseAt || day}&startIdx=${startIdx}&pageSize=200`);
-        if (!Array.isArray(data.content)) throw Error('Invalid investor response');
-        records.push(...data.content); if (data.last || data.content.length < 200) break;
-      }
+      if(basic.reutersCode && basic.reutersCode!==code)throw Error('Index identity mismatch');
+      const page=idx=>get(`https://stock.naver.com/api/domestic/market/trend/time?tradeType=KRX&marketType=${code}&bizdate=${chart.tradeBaseAt || day}&startIdx=${idx}&pageSize=200`);
+      const first=await page(0);if(!Array.isArray(first.content))throw Error('Invalid investor response');
+      const count=first.last||first.content.length<200?1:Math.min(4,Number(first.totalPages)||4);
+      const rest=await Promise.all(Array.from({length:count-1},(_,i)=>page(i+1)));
+      if(rest.some(p=>!Array.isArray(p.content)))throw Error('Invalid investor page');
+      const records=[first,...rest].flatMap(p=>p.content);
       const allPoints = records.filter(r => r.bizdate === chart.tradeBaseAt && /^\d{6}$/.test(r.time)).map(r => {
         const foreign = r.netAmounts?.find(n => n.investorGubun === '9000');
         return { time: r.time.slice(0, 2) + ':' + r.time.slice(2, 4), foreignNet: foreignNetAmount(code,foreign) };
@@ -32,9 +34,9 @@ export async function collectMarket(fetcher = fetch) {
       if (!points.length || !prices.length) throw Error('No same-session market points');
       markets[code] = { status: 'ok', code, name: basic.stockName, date: chart.tradeBaseAt.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3'), unit: '억원', measure: 'netAmount',
         price: num(basic.closePrice), changePercent: num(basic.fluctuationsRatio), priceTime: basic.localTradedAt,
-        marketStatus: basic.marketStatus, previousClose: num(chart.lastClosePrice), points, prices };
+        marketStatus: basic.marketStatus, previousClose: num(chart.lastClosePrice), points:[...new Map(points.map(p=>[p.time,p])).values()], prices,collectedAt:now };
     } catch { markets[code] = { code, status: 'unavailable', message: '제공처에서 수급 자료를 확인하지 못했습니다.' }; }
-  }
+  }));
   return { schemaVersion: 1, collectedAt: now, source: '네이버페이 증권 투자자별 매매동향 · 지수 시세', markets,
-    options: { status: 'unavailable', message: '콜·풋 옵션 수급은 확인 가능한 제공처를 추가 연결한 뒤 표시합니다.' } };
+    options: { status: 'separate', endpoint: 'market-flow?options=1' } };
 }

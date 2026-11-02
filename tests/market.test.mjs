@@ -10,7 +10,7 @@ test('cash and futures use monetary net buying in eok, and afterhours are exclud
  assert.equal(result.markets.FUT.unit,'억원');assert.equal(result.markets.FUT.points[0].foreignNet,13579.64);assert.equal(result.markets.FUT.measure,'netAmount');
  assert.equal(result.markets.KOSPI.unit,'억원');assert.equal(result.markets.KOSPI.points[0].foreignNet,123);
  assert.deepEqual(result.markets.KOSPI.points.map(p=>p.time),['09:00','15:30']);
- assert.equal(result.options.status,'unavailable');
+ assert.equal(result.options.status,'separate');
 });
 test('missing futures transaction amounts never fall back to contract count or zero',()=>{
  assert.equal(foreignNetAmount('FUT',{diffValue:'6002'}),null);
