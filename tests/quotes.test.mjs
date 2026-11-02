@@ -1,6 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';
+import{chartPriceSummary}from'../chart-price.mjs';
 import {INDICATORS,normalizeHistory,indicatorFromHistory,chartSymbols,collectStockChart,collectIndicators} from '../quotes-core.mjs';
 const history=(symbol,close=[4.7,4.9,5,4.94])=>({chart:{result:[{meta:{symbol,exchangeTimezoneName:'America/New_York'},timestamp:['20260730','20260930','20261029','20261030'].map(d=>Date.parse(d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6)+'T15:00:00Z')/1000),indicators:{quote:[{open:[...close],high:[...close],low:[...close],close:[...close],volume:[null,0,100,200]}]}}]}});
+test('chart header compares the latest price to the previous session close, with correct sign and no invented reference',()=>{
+ const sample=(a,b)=>({bars:[{date:'2026-10-30',close:a},{date:'2026-11-02',close:b}]});
+ const up=chartPriceSummary(sample(225000,230000));assert.equal(up.direction,'up');assert.ok(Math.abs(up.percent-2.2222222222)<1e-8);assert.equal(up.referenceDate,'2026-10-30');assert.equal(chartPriceSummary(sample(100,95)).direction,'down');assert.ok(Math.abs(chartPriceSummary(sample(100,95)).percent+5)<1e-8);assert.equal(chartPriceSummary(sample(100,100)).direction,'flat');assert.equal(chartPriceSummary(sample(0,100)).percent,null);assert.equal(chartPriceSummary({bars:[{date:'2026-11-02',close:100}]}).percent,null);assert.equal(chartPriceSummary({bars:[]}),null);
+});
 test('requested twelve indicators retain exact order, yield percent/bp and commodity units',()=>{
  assert.deepEqual(INDICATORS.map(i=>i.id),['us10y','kospi','kosdaq','nasdaq','dow','sp500','vix','wti','brent','gold','silver','copper']);const h=normalizeHistory(history('^TNX'),'^TNX'),i=indicatorFromHistory(INDICATORS[0],h);assert.equal(i.price,4.94);assert.ok(Math.abs(i.bp+6)<1e-10);assert.ok(Math.abs(i.changePercent+1.2)<1e-10);assert.equal(i.unit,'%');assert.equal(i.periods[1].label,'1개월');assert.equal(INDICATORS.at(-1).unit,'USD/파운드');
 });
