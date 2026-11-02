@@ -1,3 +1,4 @@
+import{normalizeChartQuote}from'./chart-price.mjs';
 export const INDICATORS=[
  {id:'us10y',name:'미국 10년물 금리',symbol:'^TNX',kind:'yield',unit:'%',digits:3},
  {id:'kospi',name:'코스피',symbol:'^KS11',kind:'index',unit:'pt',digits:2},
@@ -51,7 +52,7 @@ export function chartSymbols(market,symbol,exchange=''){
  if(market==='JP'&&/^[A-Z0-9]{4,5}$/.test(symbol))return[symbol+'.T'];
  throw Error('Invalid market or symbol');
 }
-export async function collectStockChart({market,symbol,range='6mo',exchange='',currency},fetcher=fetch){
+export async function collectStockChart({market,symbol,range='6mo',exchange='',currency,includeQuote=false},fetcher=fetch){
  if(!['1mo','3mo','6mo','1y','2y'].includes(range))throw Error('Invalid range');
  const currencies={KR:['KRW'],US:['USD'],HK:['HKD','CNY','USD'],JP:['JPY']};if(currency&&!currencies[market]?.includes(currency))throw Error('Invalid currency');
  chartSymbols(market,symbol,exchange);
@@ -60,9 +61,10 @@ export async function collectStockChart({market,symbol,range='6mo',exchange='',c
  const actualCurrency=market==='HK'&&/\(CNY\)/.test(item.name)?'CNY':market==='HK'&&/\(USD\)/.test(item.name)?'USD':{KR:'KRW',US:'USD',HK:'HKD',JP:'JPY'}[market];if(currency&&currency!==actualCurrency)throw Error('Currency mismatch');
  const providerSymbol=market==='KR'?symbol:item.reutersCode;if(typeof providerSymbol!=='string'||!/^[A-Za-z0-9.^-]{1,30}$/.test(providerSymbol))throw Error('Invalid provider identity');
  const timezone={KR:'Asia/Seoul',US:'America/New_York',HK:'Asia/Hong_Kong',JP:'Asia/Tokyo'}[market],today=localDate(Date.now()/1000,timezone),start=shifted(today,{ '1mo':1,'3mo':3,'6mo':6,'1y':12,'2y':24}[range]).replaceAll('-','')+'0000',end=today.replaceAll('-','')+'2359';
+ const quotePromise=includeQuote?(async()=>{try{const r=await fetcher((market==='KR'?'https://m.stock.naver.com/api/stock/':'https://api.stock.naver.com/stock/')+encodeURIComponent(providerSymbol)+'/basic',{signal:AbortSignal.timeout(6500)});if(!r.ok)throw Error();return normalizeChartQuote(await r.json(),{market,symbol,providerSymbol,currency:actualCurrency});}catch{return{status:'unavailable',market,symbol,currency:actualCurrency};}})():null;
  const response=await fetcher('https://api.stock.naver.com/chart/'+(market==='KR'?'domestic':'foreign')+'/item/'+encodeURIComponent(providerSymbol)+'/day?'+new URLSearchParams({startDateTime:start,endDateTime:end}),{signal:AbortSignal.timeout(12000)});if(!response.ok)throw Error('Chart source unavailable');const rows=await response.json();if(!Array.isArray(rows)||rows.length>2000)throw Error('Invalid chart rows');
  const records=rows.filter(p=>/^\d{8}$/.test(p.localDate)),dates=records.map(p=>p.localDate.slice(0,4)+'-'+p.localDate.slice(4,6)+'-'+p.localDate.slice(6,8));
  // UTC-midnight values represent calendar-date anchors, not intraday quote timestamps.
  const h=normalizeHistory({chart:{result:[{meta:{symbol:providerSymbol,exchangeTimezoneName:'UTC'},timestamp:dates.map(d=>Date.parse(d+'T00:00:00Z')/1000),indicators:{quote:[{open:records.map(p=>p.openPrice),high:records.map(p=>p.highPrice),low:records.map(p=>p.lowPrice),close:records.map(p=>p.closePrice),volume:records.map(p=>p.accumulatedTradingVolume)}]}}]}},providerSymbol);
- return{schemaVersion:1,status:'ok',market,symbol,providerSymbol,range,currency:actualCurrency,exchange:item.typeName||item.typeCode,timezone,name:item.name,asOf:h.bars.at(-1).date,bars:h.bars,collectedAt:new Date().toISOString(),source:'https://stock.naver.com/'+(market==='KR'?'domestic':'worldstock')+'/stock/'+encodeURIComponent(providerSymbol)+'/price'};
+ return{schemaVersion:1,status:'ok',market,symbol,providerSymbol,range,currency:actualCurrency,exchange:item.typeName||item.typeCode,timezone,name:item.name,asOf:h.bars.at(-1).date,bars:h.bars,...(includeQuote?{quote:await quotePromise}:{}),collectedAt:new Date().toISOString(),source:'https://stock.naver.com/'+(market==='KR'?'domestic':'worldstock')+'/stock/'+encodeURIComponent(providerSymbol)+'/price'};
 }

@@ -10,7 +10,7 @@ Deno.serve(async req=>{
  const key=JSON.stringify([market,symbol,range,exchange,currency]);
  try{
   let value=cache.get(key);if(!value||value.expires<Date.now()){
-   if(!pending.has(key))pending.set(key,collectStockChart({market,symbol,range,exchange,currency}).then(next=>{if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{value:next,expires:Date.now()+300000});return next;}).finally(()=>pending.delete(key)));
+   if(!pending.has(key))pending.set(key,collectStockChart({market,symbol,range,exchange,currency,includeQuote:true}).then(next=>{const old=cache.get(key)?.value?.quote;if(old&&['ok','stale'].includes(old.status)&&(next.quote?.status!=='ok'||Date.parse(next.quote.asOf)<Date.parse(old.asOf)))next.quote={...old,status:'stale'};if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{value:next,expires:Date.now()+300000});return next;}).finally(()=>pending.delete(key)));
    const next=await pending.get(key);value={value:next,expires:Date.now()+300000};
   }
   return new Response(JSON.stringify(value.value),{headers});

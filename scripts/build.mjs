@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
 import { mkdir, copyFile, readFile } from 'node:fs/promises';
+import {fingerprintAssets} from './fingerprint-assets.mjs';
 const config=JSON.parse(await readFile('site.config.json','utf8'));
 const key=config.supabase?.publishableKey||'';
 if(key.startsWith('sb_secret_'))throw Error('A server secret must never be placed in the browser config.');
@@ -18,4 +19,5 @@ await copyFile('data/credit.json','dist/data/credit.json');
 const indicators=JSON.parse(await readFile('data/indicators.json','utf8'));if(indicators.schemaVersion!==1||indicators.items?.length!==12)throw Error('Invalid indicator data');await copyFile('data/indicators.json','dist/data/indicators.json');
 const {validateSentimentData}=await import('../sentiment-core.mjs');const sentiment=JSON.parse(await readFile('data/sentiment.json','utf8'));if(!validateSentimentData(sentiment))throw Error('Invalid sentiment data');await copyFile('data/sentiment.json','dist/data/sentiment.json');
 const {validateETFData}=await import('../etf-core.mjs');const etfs=JSON.parse(await readFile('data/etfs.json','utf8'));if(!validateETFData(etfs))throw Error('Invalid ETF data');await copyFile('data/etfs.json','dist/data/etfs.json');
-console.log('Built dist/. '+(config.supabase?.url?'Supabase configured.':'Hosting and database connection still required.'));
+const version=await fingerprintAssets('dist');
+console.log('Built dist/. Assets '+version.revision+'. '+(config.supabase?.url?'Supabase configured.':'Hosting and database connection still required.'));
