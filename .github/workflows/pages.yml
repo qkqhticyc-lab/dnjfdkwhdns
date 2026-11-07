@@ -38,6 +38,7 @@ jobs:
       - run: npm run collect:indicators
       - run: npm run collect:sentiment
       - run: npm run collect:etfs
+      - run: node scripts/refresh-club.mjs
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

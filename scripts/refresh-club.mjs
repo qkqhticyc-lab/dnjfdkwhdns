@@ -1,0 +1,3 @@
+import{readFile}from'node:fs/promises';
+const c=JSON.parse(await readFile('site.config.json','utf8')).supabase;
+try{const r=await fetch(c.url+'/functions/v1/club-board',{headers:{apikey:c.publishableKey,Authorization:'Bearer '+c.edgeAnonKey},signal:AbortSignal.timeout(60000)});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();if(d.schemaVersion!==1||d.items?.length!==11)throw Error('Invalid response');console.log('Club targets checked: '+d.items.length+'; confirmed achievements: '+d.items.filter(x=>x.hit_date).length);}catch(error){console.warn('Club refresh delayed; saved achievements remain intact. '+error.message);}

@@ -1,3 +1,4 @@
+import {initClub} from './club.js';
 import {initETFs} from './etfs.js';
 import {initAuth} from './auth.js';
 import {initMarket} from './market.js';
@@ -16,9 +17,11 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  const page=document.body.dataset.page;
  const community=page==='community'?initCommunity(config):null;
  // Public market data starts independently of account/session initialization.
+ const club=page==='club'?initClub(config):null;
  const market=page==='market'?Promise.all([initMarket(config),initIndicators(config),initSentiment()]):null;
  await initAuth(config,community?.onSession);
  if(market)await market;
+ if(club)await club;
  if(page==='reports')await initResearch();
  if(page==='credit')await initCredit();
  if(page==='charts')await initCharts(config);

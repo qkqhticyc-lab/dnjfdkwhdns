@@ -1,0 +1,9 @@
+import{collectClubObservations}from'./club-core.mjs';
+const url=Deno.env.get('SUPABASE_URL')!,key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const dbHeaders={apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'};
+const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'GET,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
+const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{headers,status});
+let pending:Promise<any>|null=null;
+async function read(){const r=await fetch(url+'/rest/v1/club_targets?select=*&order=round.desc,id.asc',{headers:dbHeaders,signal:AbortSignal.timeout(8000)});if(!r.ok)throw Error('Club storage unavailable');const rows=await r.json();if(!Array.isArray(rows)||rows.length!==11)throw Error('Club targets missing');return rows;}
+async function load(){const rows=await read(),fresh=rows.every(r=>Date.parse(r.checked_at)>Date.now()-300000);if(fresh)return{schemaVersion:1,items:rows};try{const observations=await collectClubObservations(rows),r=await fetch(url+'/rest/v1/rpc/record_club_observations',{method:'POST',headers:dbHeaders,body:JSON.stringify({observations}),signal:AbortSignal.timeout(8000)});if(!r.ok)throw Error('Club save failed');return{schemaVersion:1,items:await read()};}catch{return{schemaVersion:1,status:'stale',items:rows};}}
+Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{headers});if(req.method!=='GET')return reply({error:'Method not allowed'},405);if(new URL(req.url).search) return reply({error:'This board has fixed targets'},400);try{if(!pending)pending=load().finally(()=>pending=null);return reply(await pending);}catch{return reply({error:'Club data temporarily unavailable'},503);}});
