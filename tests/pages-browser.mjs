@@ -10,7 +10,7 @@ try{
  assert.ok(!(await page.locator('.flow-color-guide').textContent()).includes('계약'));
  assert.equal(await page.locator('.brand b').textContent(),'부자가 되어보자...');
  await page.locator('[data-flow-code=KOSDAQ] svg').waitFor();assert.ok((await page.locator('#flow-net').textContent()).includes('억원'));
- await page.locator('[data-flow-code=FUT] input[type=range]').fill('20');assert.ok((await page.locator('[data-flow-code=FUT] .flow-overview-selection').textContent()).includes('선택'));
+ await page.locator('[data-flow-code=FUT] svg').focus();await page.keyboard.press('Home');assert.ok((await page.locator('[data-flow-code=FUT] .flow-overview-selection').textContent()).includes('시각'));
  await page.screenshot({path:'outputs/market-flow-desktop.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'outputs/market-flow-mobile.png',fullPage:true});
  const privateLink=await page.locator('header nav [data-private]').getAttribute('href');assert.ok(privateLink.includes('my-investment-journal-oct31'));assert.equal(await page.locator('header nav [data-private]').getAttribute('target'),null);

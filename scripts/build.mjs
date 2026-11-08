@@ -12,7 +12,7 @@ await mkdir('dist/data',{recursive:true});
 const research=JSON.parse(await readFile('data/research.json','utf8'));
 if(research.schemaVersion!==1||!['targets','earnings','overseas'].every(key=>Array.isArray(research[key]?.items)))throw Error('Invalid research data');
 await copyFile('data/research.json','dist/data/research.json');
-await copyFile('data/market.json','dist/data/market.json');
+await copyFile('data/market.json','dist/data/market.json');await copyFile('data/us-futures.json','dist/data/us-futures.json');
 const credit=JSON.parse(await readFile('data/credit.json','utf8'));
 const {validateCreditData}=await import('../credit-core.mjs');if(!validateCreditData(credit))throw Error('Invalid credit data');
 await copyFile('data/credit.json','dist/data/credit.json');

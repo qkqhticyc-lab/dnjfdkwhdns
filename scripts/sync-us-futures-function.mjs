@@ -1,0 +1,1 @@
+import{copyFile}from'node:fs/promises';for(const name of['us-futures-core.mjs','edge-cache.mjs'])await copyFile(name,'supabase/functions/us-futures/'+name);console.log('US futures function modules synchronized.');

@@ -1,0 +1,3 @@
+import{collectUsFutures,retainUsFutures}from'./us-futures-core.mjs';import{createRequestCache}from'./edge-cache.mjs';
+const cache=createRequestCache({ttl:20000}),headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'GET,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
+Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{headers});if(req.method!=='GET')return new Response('{}',{headers,status:405});if(new URL(req.url).search)return new Response('{}',{headers,status:400});const data=await cache('us-futures',()=>collectUsFutures(),retainUsFutures);return new Response(JSON.stringify(data),{headers});});
