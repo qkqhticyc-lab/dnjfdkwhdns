@@ -1,42 +1,20 @@
-export const MARKETS = ['KOSPI', 'KOSDAQ', 'FUT'];
-const num = value => { const n = Number(String(value).replaceAll(',', '')); return value != null && String(value).trim() !== '' && Number.isFinite(n) ? n : null; };
-export function foreignNetAmount(code, row) {
-  if(code==='FUT'){
-    const buy=num(row?.buyPrice),sell=num(row?.sellPrice);
-    // Naver futures transaction amounts are in million KRW: 100 million = 1 eok.
-    return buy==null||sell==null?null:(buy-sell)/100;
-  }
-  const net=num(row?.diffValue);return net==null?null:net/1e8;
+export const MARKETS=['KOSPI','KOSDAQ','FUT'];
+const num=value=>{const n=Number(String(value).replaceAll(',',''));return value!=null&&String(value).trim()!==''&&Number.isFinite(n)?n:null;};
+export function foreignNetAmount(code,row){if(code==='FUT'){const buy=num(row?.buyPrice),sell=num(row?.sellPrice);return buy==null||sell==null?null:(buy-sell)/100;}const net=num(row?.diffValue);return net==null?null:net/1e8;}
+export function normalizeFlowSeries(code,records,date){const minutes=new Map();for(const r of [...records].filter(r=>r.bizdate===date&&/^(?:[01]\d|2[0-3])[0-5]\d[0-5]\d$/.test(r.time||'')).sort((a,b)=>a.time.localeCompare(b.time))){const value=foreignNetAmount(code,r.netAmounts?.find(n=>n.investorGubun==='9000'));if(value==null)continue;const time=r.time.slice(0,2)+':'+r.time.slice(2,4);minutes.set(time,{time,foreignNet:value,asOf:time+':'+r.time.slice(4,6)});}const points=[...minutes.values()];if(!points.length)throw Error('No observed investor amounts');return points;}
+export function combineFlowSeries(series){
+ const entries=Object.entries(series);if(!entries.length||entries.some(([,p])=>!p.length))throw Error('Missing venue series');const times=[...new Set(entries.flatMap(([,p])=>p.map(v=>v.time)))].sort(),indices=entries.map(()=>-1),points=[];
+ for(const time of times){for(let i=0;i<entries.length;i++){const list=entries[i][1];while(indices[i]+1<list.length&&list[indices[i]+1].time<=time)indices[i]++;}if(indices.some(i=>i<0))continue;const total=entries.reduce((s,[,list],i)=>s+list[indices[i]].foreignNet,0);points.push({time,foreignNet:Number(total.toFixed(8))});}
+ if(!points.length)throw Error('No common observed venue interval');return{points,components:Object.fromEntries(entries.map(([venue,list])=>[venue,{foreignNet:list.at(-1).foreignNet,asOf:list.at(-1).asOf,firstTime:list[0].time}]))};
 }
-export async function collectMarket(fetcher = fetch, codes = MARKETS) {
-  if (!codes.length || codes.some(c=>!MARKETS.includes(c))) throw Error('Invalid market');
-  const now = new Date().toISOString();
-  const day = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10).replaceAll('-', '');
-  async function get(url) { const r = await fetcher(url, { signal: AbortSignal.timeout(6500) }); if (!r.ok) throw Error(`Source HTTP ${r.status}`); return r.json(); }
-  const markets = {};
-  await Promise.all(codes.map(async code => {
-    try {
-      const [basic, chart] = await Promise.all([get(`https://m.stock.naver.com/api/index/${code}/basic`), get(`https://api.stock.naver.com/chart/domestic/index/${code}?periodType=day`)]);
-      if (!Array.isArray(chart.priceInfos) || !/^\d{8}$/.test(chart.tradeBaseAt)) throw Error('Invalid index response');
-      if(basic.reutersCode && basic.reutersCode!==code)throw Error('Index identity mismatch');
-      const page=idx=>get(`https://stock.naver.com/api/domestic/market/trend/time?tradeType=KRX&marketType=${code}&bizdate=${chart.tradeBaseAt || day}&startIdx=${idx}&pageSize=200`);
-      const first=await page(0);if(!Array.isArray(first.content))throw Error('Invalid investor response');
-      const count=first.last||first.content.length<200?1:Math.min(4,Number(first.totalPages)||4);
-      const rest=await Promise.all(Array.from({length:count-1},(_,i)=>page(i+1)));
-      if(rest.some(p=>!Array.isArray(p.content)))throw Error('Invalid investor page');
-      const records=[first,...rest].flatMap(p=>p.content);
-      const allPoints = records.filter(r => r.bizdate === chart.tradeBaseAt && /^\d{6}$/.test(r.time)).map(r => {
-        const foreign = r.netAmounts?.find(n => n.investorGubun === '9000');
-        return { time: r.time.slice(0, 2) + ':' + r.time.slice(2, 4), foreignNet: foreignNetAmount(code,foreign) };
-      }).filter(p => p.foreignNet != null).sort((a, b) => a.time.localeCompare(b.time));
-      const prices = chart.priceInfos.filter(p => String(p.localDateTime).startsWith(chart.tradeBaseAt) && num(p.currentPrice) > 0).map(p => ({ time: p.localDateTime.slice(8, 10) + ':' + p.localDateTime.slice(10, 12), price: num(p.currentPrice) }));
-      const points=allPoints.filter(p=>p.time>=prices[0]?.time&&p.time<=prices.at(-1)?.time);
-      if (!points.length || !prices.length) throw Error('No same-session market points');
-      markets[code] = { status: 'ok', code, name: basic.stockName, date: chart.tradeBaseAt.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3'), unit: '억원', measure: 'netAmount',
-        price: num(basic.closePrice), changePercent: num(basic.fluctuationsRatio), priceTime: basic.localTradedAt,
-        marketStatus: basic.marketStatus, previousClose: num(chart.lastClosePrice), points:[...new Map(points.map(p=>[p.time,p])).values()], prices,collectedAt:now };
-    } catch { markets[code] = { code, status: 'unavailable', message: '제공처에서 수급 자료를 확인하지 못했습니다.' }; }
-  }));
-  return { schemaVersion: 1, collectedAt: now, source: '네이버페이 증권 투자자별 매매동향 · 지수 시세', markets,
-    options: { status: 'separate', endpoint: 'market-flow?options=1' } };
+export async function collectMarket(fetcher=fetch,codes=MARKETS){
+ if(!codes.length||codes.some(c=>!MARKETS.includes(c)))throw Error('Invalid market');const now=new Date().toISOString();async function get(url){const r=await fetcher(url,{signal:AbortSignal.timeout(6500)});if(!r.ok)throw Error('Source HTTP '+r.status);return r.json();}
+ async function venueSeries(code,venue,date){const page=idx=>get('https://stock.naver.com/api/domestic/market/trend/time?'+new URLSearchParams({tradeType:venue,marketType:code,bizdate:date,startIdx:String(idx),pageSize:'200'})),first=await page(0);if(!Array.isArray(first.content))throw Error('Invalid investor response');const count=first.last||first.content.length<200?1:Number(first.totalPages)||4;if(!Number.isInteger(count)||count<1||count>8)throw Error('Invalid investor page count');const rest=await Promise.all(Array.from({length:count-1},(_,i)=>page(i+1)));if(rest.some(p=>!Array.isArray(p.content)))throw Error('Invalid investor page');return normalizeFlowSeries(code,[first,...rest].flatMap(p=>p.content),date);}
+ const markets={};await Promise.all(codes.map(async code=>{try{
+  const [basic,chart]=await Promise.all([get('https://m.stock.naver.com/api/index/'+code+'/basic'),get('https://api.stock.naver.com/chart/domestic/index/'+code+'?periodType=day')]);if(!Array.isArray(chart.priceInfos)||!/^\d{8}$/.test(chart.tradeBaseAt)||basic.reutersCode&&basic.reutersCode!==code)throw Error('Invalid index identity');
+  const venues=code==='FUT'?['KRX']:['KRX','NXT'],observations=await Promise.all(venues.map(v=>venueSeries(code,v,chart.tradeBaseAt))),merged=combineFlowSeries(Object.fromEntries(venues.map((v,i)=>[v,observations[i]])));
+  const prices=[...new Map(chart.priceInfos.filter(p=>String(p.localDateTime).startsWith(chart.tradeBaseAt)&&num(p.currentPrice)>0).map(p=>{const time=p.localDateTime.slice(8,10)+':'+p.localDateTime.slice(10,12);return[time,{time,price:num(p.currentPrice)}];})).values()].sort((a,b)=>a.time.localeCompare(b.time));if(!prices.length)throw Error('No index prices');
+  markets[code]={status:'ok',seriesVersion:2,code,name:basic.stockName,date:chart.tradeBaseAt.replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3'),unit:'억원',measure:'netAmount',scope:venues.join('+'),scopeLabel:code==='FUT'?'KRX 선물 집계':'KRX+NXT 합산',price:num(basic.closePrice),changePercent:num(basic.fluctuationsRatio),priceTime:basic.localTradedAt,marketStatus:basic.marketStatus,previousClose:num(chart.lastClosePrice),...merged,prices,collectedAt:now};
+ }catch{markets[code]={code,status:'unavailable',message:'제공처의 전체 수급 집계를 확인하지 못했습니다.'};}}));
+ return{schemaVersion:1,collectedAt:now,source:'네이버페이 증권 투자자별 매매동향 · 현물 KRX+NXT 합산 / 선물 KRX',markets,options:{status:'separate',endpoint:'market-flow?options=1'}};
 }
