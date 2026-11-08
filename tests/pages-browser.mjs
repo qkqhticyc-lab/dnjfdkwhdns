@@ -4,17 +4,17 @@ const browser=await chromium.launch({headless:true,executablePath:process.env.CH
 const base=process.env.TEST_SITE_URL||'http://127.0.0.1:5183/preview/';
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto(base,{waitUntil:'domcontentloaded'});await page.locator('#flow-chart path').first().waitFor();
+ await page.goto(base,{waitUntil:'domcontentloaded'});await page.locator('[data-flow-code=FUT] svg path').first().waitFor();
  assert.equal(await page.locator('iframe').count(),0);assert.equal(await page.locator('#entry-form').count(),0);
- assert.ok((await page.locator('#flow-net').textContent()).includes('억원'));
- assert.ok(!(await page.locator('#flow-caption').textContent()).includes('계약'));
+ assert.ok((await page.locator('[data-flow-code=FUT] .flow-net-value').textContent()).includes('억원'));
+ assert.ok(!(await page.locator('.flow-color-guide').textContent()).includes('계약'));
  assert.equal(await page.locator('.brand b').textContent(),'부자가 되어보자...');
- await page.locator('[data-flow-market="KOSDAQ"]').click();assert.ok((await page.locator('#flow-net').textContent()).includes('억원'));
- await page.locator('#flow-slider').fill('20');assert.ok((await page.locator('#flow-selection').textContent()).includes('선택'));
+ await page.locator('[data-flow-code=KOSDAQ] svg').waitFor();assert.ok((await page.locator('#flow-net').textContent()).includes('억원'));
+ await page.locator('[data-flow-code=FUT] input[type=range]').fill('20');assert.ok((await page.locator('[data-flow-code=FUT] .flow-overview-selection').textContent()).includes('선택'));
  await page.screenshot({path:'outputs/market-flow-desktop.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'outputs/market-flow-mobile.png',fullPage:true});
  const privateLink=await page.locator('header nav [data-private]').getAttribute('href');assert.ok(privateLink.includes('my-investment-journal-oct31'));assert.equal(await page.locator('header nav [data-private]').getAttribute('target'),null);
- await page.getByRole('link',{name:'리포트',exact:true}).click();await page.locator('.research-row').first().waitFor();assert.ok(page.url().endsWith('reports.html'));assert.equal(await page.locator('#flow-chart').count(),0);
+ await page.getByRole('link',{name:'리포트',exact:true}).click();await page.locator('.research-row').first().waitFor();assert.ok(page.url().endsWith('reports.html'));assert.equal(await page.locator('#flow-overview').count(),0);
  await page.getByRole('link',{name:'당신들의 반성일기',exact:true}).click();await page.locator('#shared-posts .empty-message').waitFor();assert.ok(page.url().endsWith('journals.html'));assert.equal(await page.locator('#post-save').isDisabled(),true);assert.equal(await page.locator('[name="quantity"],[name="price"]').count(),0);
  const context=await browser.newContext();const id='11111111-1111-4111-8111-111111111111',exp=Math.floor(Date.now()/1000)+3600;
  const token=[{alg:'HS256',typ:'JWT'},{sub:id,exp,role:'authenticated',aud:'authenticated'}].map(v=>Buffer.from(JSON.stringify(v)).toString('base64url')).join('.')+'.test';
