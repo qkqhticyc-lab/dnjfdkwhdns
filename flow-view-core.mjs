@@ -8,6 +8,15 @@ export function flowTone(percent){
 const validTime=t=>typeof t==='string'&&/^\d{2}:\d{2}$/.test(t)&&+t.slice(0,2)<24&&+t.slice(3)<60;
 export function validFlowMarket(m,code){return m?.code===code&&m.seriesVersion===2&&m.scope===(code==='FUT'?'KRX':'KRX+NXT')&&['ok','stale'].includes(m.status)&&m.unit==='억원'&&m.measure==='netAmount'&&/^\d{4}-\d{2}-\d{2}$/.test(m.date||'')&&Array.isArray(m.points)&&m.points.length>0&&m.points.every((p,i)=>validTime(p.time)&&Number.isFinite(p.foreignNet)&&(!i||p.time>m.points[i-1].time))&&Array.isArray(m.prices)&&m.prices.length>0&&m.prices.every(p=>validTime(p.time)&&Number.isFinite(p.price)&&p.price>0);}
 export function flowWindow(m){const points=m.points,prices=[...m.prices].sort((a,b)=>a.time.localeCompare(b.time)),first=[points[0].time,prices[0].time].sort()[0],last=[points.at(-1).time,prices.at(-1).time].sort().at(-1);return{points,prices,first,last};}
+// The current quote and minute-series endpoint update independently. Never use
+// a delayed candle as the headline, or extend the historical line to quote time.
+export function flowHeadline(m){
+ const last=m.prices?.at(-1),stamp=m.priceTime;
+ const valid=Number.isFinite(m.price)&&m.price>0&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+09:00$/.test(stamp||'')&&stamp.slice(0,10)===m.date&&(!last||stamp.slice(11,16)>=last.time);
+ const price=valid?m.price:last?.price,percent=valid&&Number.isFinite(m.changePercent)?m.changePercent:Number.isFinite(m.previousClose)&&m.previousClose>0&&Number.isFinite(price)?(price/m.previousClose-1)*100:null;
+ const delay=Number.isFinite(m.delayMinutes)&&m.delayMinutes>=0?m.delayMinutes:null;
+ return{price,percent,time:valid?stamp.slice(11,19):last?.time,source:valid?'quote':'chart',delayLabel:delay===0?'제공처 실시간':delay>0?`제공처 ${delay}분 지연`:'제공처 지연 여부 미제공'};
+}
 export function flowReading(m,window,time=null){const {points,prices}=window,current=time==null?points.at(-1):points.filter(p=>p.time<=time).at(-1)||points[0],before=points.filter(p=>{const minutes=t=>+t.slice(0,2)*60+(+t.slice(3));return minutes(p.time)<=minutes(current.time)-30;}).at(-1),price=time==null?prices.at(-1)||null:prices.filter(p=>p.time<=current.time).at(-1)||null;
  const change=price&&Number.isFinite(m.previousClose)&&m.previousClose>0?(price.price/m.previousClose-1)*100:price&&current===points.at(-1)&&Math.abs(price.price-m.price)<1e-8&&Number.isFinite(m.changePercent)?m.changePercent:null;
  return{current,price,change,delta:before?current.foreignNet-before.foreignNet:null};

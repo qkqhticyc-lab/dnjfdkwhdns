@@ -1,5 +1,5 @@
 import {collectStockChart,chartSymbols} from './quotes-core.mjs';
-const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'GET,OPTIONS','Content-Type':'application/json','Cache-Control':'public,max-age=120'};
+const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'GET,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
 const cache=new Map<string,{value:any;expires:number}>(),pending=new Map<string,Promise<any>>();
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{headers});
@@ -10,8 +10,8 @@ Deno.serve(async req=>{
  const key=JSON.stringify([market,symbol,range,exchange,currency]);
  try{
   let value=cache.get(key);if(!value||value.expires<Date.now()){
-   if(!pending.has(key))pending.set(key,collectStockChart({market,symbol,range,exchange,currency,includeQuote:true}).then(next=>{const old=cache.get(key)?.value?.quote;if(old&&['ok','stale'].includes(old.status)&&(next.quote?.status!=='ok'||Date.parse(next.quote.asOf)<Date.parse(old.asOf)))next.quote={...old,status:'stale'};if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{value:next,expires:Date.now()+300000});return next;}).finally(()=>pending.delete(key)));
-   const next=await pending.get(key);value={value:next,expires:Date.now()+300000};
+   if(!pending.has(key))pending.set(key,collectStockChart({market,symbol,range,exchange,currency,includeQuote:true}).then(next=>{const old=cache.get(key)?.value?.quote;if(old&&['ok','stale'].includes(old.status)&&(next.quote?.status!=='ok'||Date.parse(next.quote.asOf)<Date.parse(old.asOf)))next.quote={...old,status:'stale'};if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{value:next,expires:Date.now()+20000});return next;}).finally(()=>pending.delete(key)));
+   const next=await pending.get(key);value={value:next,expires:Date.now()+20000};
   }
   return new Response(JSON.stringify(value.value),{headers});
  }catch{return new Response(JSON.stringify({error:'Chart source temporarily unavailable'}),{status:502,headers:{...headers,'Cache-Control':'no-store'}});}

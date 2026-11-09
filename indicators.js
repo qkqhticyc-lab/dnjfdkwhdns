@@ -37,10 +37,10 @@ export async function initIndicators(config){
   }
   if(focus)grid.querySelector(`[data-indicator-cursor="${focus}"]`)?.focus({preventScroll:true});
   const count=live?.items?.filter(i=>i.status==='ok').length||0,stale=live?.items?.some(i=>i.status==='stale');warning.hidden=count===12&&!stale;warning.textContent=live?`일부 장중 시세의 연결이 지연됩니다. 이전 자료는 원래 시세 시각을 유지합니다. (${count}/12 정상 조회)`:'장중 시세 연결 중 · 저장된 일봉은 장중 차트와 구분해 표시합니다.';
-  document.getElementById('indicator-updated').textContent=live?`장중 조회 ${kst(live.collectedAt)} KST · 접속 중 30초마다 확인 · 제공처 지연은 카드별 표시`:'장중 시세를 확인하고 있습니다.';
+  document.getElementById('indicator-updated').textContent=live?`장중 조회 ${kst(live.collectedAt)} KST · 접속 중 15초마다 확인 · 제공처 지연은 카드별 표시`:'장중 시세를 확인하고 있습니다.';
  }
  async function loadLive(){if(busy)return;busy=true;button.disabled=true;try{const r=await fetch(config.supabase.url+'/functions/v1/market-indicators',{headers,cache:'no-store',signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error();const d=await r.json();if(d.schemaVersion!==1||d.items?.length!==12)throw Error();live=retainLiveItems(d,live);}catch{if(live)live={...live,items:live.items.map(i=>i.status==='ok'?{...i,status:'stale'}:i)};}finally{busy=false;button.disabled=false;draw();}}
  async function loadHistory(){try{const r=await fetch('./data/indicators.json',{cache:'no-store',signal:AbortSignal.timeout(7000)});if(!r.ok)throw Error();const d=await r.json();if(d.schemaVersion!==1||d.items?.length!==12)throw Error();history=d;draw();}catch{}}
  document.querySelectorAll('[data-indicator-range]').forEach(b=>b.onclick=()=>{mode=b.dataset.indicatorRange;document.querySelectorAll('[data-indicator-range]').forEach(n=>n.setAttribute('aria-pressed',String(n===b)));draw();});
- button.onclick=()=>{loadLive();loadHistory();};draw();await Promise.all([loadLive(),loadHistory()]);setInterval(()=>{if(!document.hidden)loadLive();},30000);setInterval(()=>{if(!document.hidden)loadHistory();},300000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadLive();});
+ button.onclick=()=>{loadLive();loadHistory();};draw();await Promise.all([loadLive(),loadHistory()]);setInterval(()=>{if(!document.hidden)loadLive();},15000);setInterval(()=>{if(!document.hidden)loadHistory();},300000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadLive();});
 }

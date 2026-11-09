@@ -33,7 +33,7 @@ export function normalizeLiveIndicator(def,quotePayload,chartPayload,now=new Dat
  // A chart failure must not turn today's daily snapshot into an intraday chart.
  if(chartPayload?.isSuccess!==false&&chart?.code===def.code&&chart.infoType===def.type&&chart.periodType==='day'&&/^\d{8}$/.test(chart.tradeBaseAt||'')&&Array.isArray(chart.priceInfos)){
   const maxTime=chart.localDateTimeNow,quoteLocal=quoteAt.replace(/[-:T]/g,'').slice(0,14),end=maxTime&&/^\d{14}$/.test(maxTime)?[maxTime,quoteLocal].sort()[0]:quoteLocal;
-  points=[...new Map(chart.priceInfos.filter(p=>/^\d{14}$/.test(p.localDateTime||'')&&p.localDateTime<=end&&num(p.currentPrice)>0&&(!chart.openTime||p.localDateTime>=chart.openTime)&&(!chart.closeTime||p.localDateTime<=chart.closeTime)).map(p=>[p.localDateTime,{at:p.localDateTime,price:num(p.currentPrice)}])).values()].sort((a,b)=>a.at.localeCompare(b.at));
+  points=[...new Map(chart.priceInfos.filter(p=>/^\d{14}$/.test(p.localDateTime||'')&&p.localDateTime<=end&&num(p.currentPrice)>0&&(!chart.openTime||p.localDateTime>=chart.openTime)&&(def.category==='domestic'?p.localDateTime.slice(0,8)===chart.tradeBaseAt:!chart.closeTime||p.localDateTime<=chart.closeTime)).map(p=>[p.localDateTime,{at:p.localDateTime,price:num(p.currentPrice)}])).values()].sort((a,b)=>a.at.localeCompare(b.at));
   // Do not join a quote for a newer local date to a previous session chart.
   if(points.length&&points.at(-1).at.slice(0,8)!==quoteLocal.slice(0,8))points=[];
   chartDate=points.length?chart.tradeBaseAt:null;chartPreviousClose=num(chart.lastClosePrice);
