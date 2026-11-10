@@ -13,6 +13,7 @@ try{
  const pinned=await state(),oldCalls=calls;await p.clock.runFor(30500);await p.waitForFunction(()=>document.querySelector('#chart-status').textContent==='');assert.ok(calls>oldCalls);assert.equal((await state()).viewStart,pinned.viewStart);assert.equal((await state()).priceMin,pinned.priceMin);assert.equal((await state()).priceMax,pinned.priceMax);
  box=await plot.boundingBox();await p.mouse.move(box.x+box.width*.5,box.y+box.height*.4);await p.mouse.wheel(0,-200);await p.clock.runFor(250);assert.ok(+(await state()).viewCount<+c.viewCount,'wheel zooms time');
  const axis2=await p.locator('[data-price-axis]').boundingBox(),before=await state();await p.mouse.move(axis2.x+axis2.width/2,axis2.y+axis2.height/2);await p.mouse.wheel(0,-200);await p.clock.runFor(250);assert.ok(span(await state())<span(before),'wheel on price axis zooms price');
+ const manual=await state();await p.locator('[data-price-axis]').dblclick();assert.notEqual((await state()).priceMin,manual.priceMin,'axis double click resets scale');
  await p.locator('[data-guide-action=auto-price]').click();assert.notEqual((await state()).priceMin,before.priceMin);
  await p.locator('[data-guide-action=latest]').click();assert.equal((await state()).follow,'true');assert.equal((await state()).viewEnd,fixture.guide.frames.at(-1).asOf);
  await p.locator('[data-guide-action=back]').click();assert.equal((await state()).follow,'false');await p.locator('[data-chart-range="1mo"]').click();assert.equal((await state()).follow,'true');assert.ok(+(await state()).viewCount<30);

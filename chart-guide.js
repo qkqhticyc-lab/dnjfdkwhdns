@@ -21,6 +21,7 @@ export function guideView(data,options={}){
  if(!view||view.key!==stateKey){view={key:stateKey,count:0,follow:true,startAt:null,price:null};if(viewStates.size>30)viewStates.delete(viewStates.keys().next().value);viewStates.set(viewKey,view);}
  let drag=null,current=null,pointers=new Map(),wheelTimer;
  const redraw=()=>{const focusPlot=document.activeElement?.tagName?.toLowerCase()==='svg';draw();if(focusPlot)content.querySelector('svg')?.focus({preventScroll:true});};
+ section.ondblclick=e=>{if(!current)return;const r=content.querySelector('svg')?.getBoundingClientRect();if(r&&(e.clientX-r.left)/r.width*current.width>=current.width-82&&e.clientY>=r.top&&e.clientY<=r.bottom){view.price=null;redraw();}};
  const interactionDone=()=>{delete section.dataset.interacting;options.onInteractionEnd?.();};
  section.onpointermove=e=>{
   if(!pointers.has(e.pointerId)||!drag||!current)return;
@@ -83,7 +84,7 @@ export function guideView(data,options={}){
   const coords=e=>{const rect=plot.getBoundingClientRect();return{x:(e.clientX-rect.left)/rect.width*width,y:(e.clientY-rect.top)/rect.height*420,rect};};
   current={rows:guide.frames,width,rect:plot.getBoundingClientRect(),step,window,price:{min,max}};
   const pick=e=>{if(drag)return;const c=coords(e);if(c.x<right)choose(Math.floor((c.x-left)/step));};plot.onpointermove=pick;plot.onclick=pick;plot.onpointerleave=()=>{if(!drag)choose(frames.length-1);};
-  plot.onpointerdown=e=>{if(e.button!==0||e.target===axis&&e.pointerType==='touch'&&pointers.size)return;e.preventDefault();const c=coords(e);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});section.setPointerCapture(e.pointerId);section.dataset.interacting='true';current.rect=c.rect;
+  plot.onpointerdown=e=>{if(e.button!==0||e.target===axis&&e.pointerType==='touch'&&pointers.size)return;e.preventDefault();const c=coords(e);if(c.x<right)choose(Math.floor((c.x-left)/step));pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});section.setPointerCapture(e.pointerId);section.dataset.interacting='true';current.rect=c.rect;
    if(pointers.size===2){const points=[...pointers.values()],anchor=Math.max(0,Math.min(1,(((points[0].x+points[1].x)/2-c.rect.left)/c.rect.width*width-left)/(right-left)));drag={...current,kind:'pinch',start:window.start,count:window.count,anchor,distance:Math.max(10,Math.hypot(points[0].x-points[1].x,points[0].y-points[1].y))};}
    else drag={...current,kind:c.x>=right?'price':'pan',x:e.clientX,y:e.clientY,start:window.start,count:window.count};
   };
