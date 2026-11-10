@@ -1,4 +1,5 @@
 import {collectStockChart,chartSymbols} from './quotes-core.mjs';
+import {collectLiveChart} from './live-chart-core.mjs';
 const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'GET,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
 const cache=new Map<string,{value:any;expires:number}>(),pending=new Map<string,Promise<any>>();
 Deno.serve(async req=>{
@@ -7,10 +8,12 @@ Deno.serve(async req=>{
  const q=new URL(req.url).searchParams,market=q.get('market')||'',symbol=(q.get('symbol')||'').toUpperCase(),range=q.get('range')||'6mo',exchange=(q.get('exchange')||'').slice(0,60),currency=q.get('currency')||undefined;
  try{chartSymbols(market,symbol,exchange);if(!['1mo','3mo','6mo','1y','2y'].includes(range)||currency&&!({KR:['KRW'],US:['USD'],HK:['HKD','CNY','USD'],JP:['JPY']} as Record<string,string[]>)[market]?.includes(currency))throw Error();}
  catch{return new Response(JSON.stringify({error:'Invalid chart request'}),{status:400,headers:{...headers,'Cache-Control':'no-store'}});}
- const key=JSON.stringify([market,symbol,range,exchange,currency]);
+ const live=q.get('live')==='1',frame=q.get('frame')||'daily';
+ if(!['daily','fourHour'].includes(frame))return new Response('{}',{status:400,headers});
+ const key=JSON.stringify([market,symbol,range,exchange,currency,live,frame]);
  try{
   let value=cache.get(key);if(!value||value.expires<Date.now()){
-   if(!pending.has(key))pending.set(key,collectStockChart({market,symbol,range,exchange,currency,includeQuote:true}).then(next=>{const old=cache.get(key)?.value?.quote;if(old&&['ok','stale'].includes(old.status)&&(next.quote?.status!=='ok'||Date.parse(next.quote.asOf)<Date.parse(old.asOf)))next.quote={...old,status:'stale'};if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{value:next,expires:Date.now()+20000});return next;}).finally(()=>pending.delete(key)));
+   if(!pending.has(key))pending.set(key,(live?collectLiveChart({market,symbol,range,exchange,currency,frame}):collectStockChart({market,symbol,range,exchange,currency,includeQuote:true})).then(next=>{const old=cache.get(key)?.value?.quote;if(old&&['ok','stale'].includes(old.status)&&(next.quote?.status!=='ok'||Date.parse(next.quote.asOf)<Date.parse(old.asOf)))next.quote={...old,status:'stale'};if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{value:next,expires:Date.now()+20000});return next;}).finally(()=>pending.delete(key)));
    const next=await pending.get(key);value={value:next,expires:Date.now()+20000};
   }
   return new Response(JSON.stringify(value.value),{headers});

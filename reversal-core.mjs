@@ -23,7 +23,7 @@ export function analyzeReversal(rows){
  return{status:'ok',state,label:labels[state],direction:direction(state),asOf:last.asOf,observations:n,close:last.close,sma20:f.fast,sma60:f.slow,slope20:f.slopeFast,slope60:f.slopeSlow,rsi,confirmation:upConfirmed||downConfirmed?2:['up','down'].includes(f.regime)?1:0,lastSignal:lastSignal&&{direction:lastSignal.direction,asOf:lastSignal.asOf},volumeRatio:averageVolume>0&&finite(last.volume)&&last.volume>=0?last.volume/averageVolume:null,breakout20:last.close>Math.max(...prior.map(p=>p.close))?'up':last.close<Math.min(...prior.map(p=>p.close))?'down':'none',chart:rows.slice(-40).map((r,i)=>({asOf:r.asOf,close:r.close,sma20:frames[n-Math.min(n,40)+i].fast,sma60:frames[n-Math.min(n,40)+i].slow})),conditions:[{label:'종가 > 20봉선',met:last.close>f.fast,downLabel:'종가 < 20봉선',downMet:last.close<f.fast},{label:'20봉선 > 60봉선',met:f.fast>f.slow,downLabel:'20봉선 < 60봉선',downMet:f.fast<f.slow},{label:'20봉선 5봉 기울기 > 0',met:f.slopeFast>0,downLabel:'20봉선 5봉 기울기 < 0',downMet:f.slopeFast<0},{label:'60봉선 5봉 기울기 > 0',met:f.slopeSlow>0,downLabel:'60봉선 5봉 기울기 < 0',downMet:f.slopeSlow<0},{label:'RSI(14) ≥ 50',met:rsi>=50,downLabel:'RSI(14) < 50',downMet:rsi<50}]};
 }
 const lunch=(market,t,zone)=>{const m=minute(t,zone);return market==='HK'?m>=720&&m<780:market==='JP'?m>=690&&m<750:false;};
-export function aggregateFourHours(payload,{symbol,market,currency,timezone},now=new Date()){
+export function aggregateFourHours(payload,{symbol,market,currency,timezone},now=new Date(),includeLive=false){
  const r=payload?.chart?.result?.[0],meta=r?.meta,q=r?.indicators?.quote?.[0];
  if(payload?.chart?.error||meta?.symbol?.toUpperCase()!==symbol.toUpperCase()||meta.currency!==currency||meta.exchangeTimezoneName!==timezone||meta.dataGranularity!=='30m'||!Array.isArray(r.timestamp)||r.timestamp.length>6000||!q)throw Error('Invalid intraday identity or interval');
  const raw=Array.isArray(meta.tradingPeriods)?meta.tradingPeriods:meta.tradingPeriods?.regular;
@@ -33,10 +33,10 @@ export function aggregateFourHours(payload,{symbol,market,currency,timezone},now
  const cutoff=Math.min(now.getTime()/1000,meta.regularMarketTime),bars=new Map();
  for(const[i,time]of r.timestamp.entries()){if(!finite(time)||time>cutoff)continue;const open=q.open?.[i],high=q.high?.[i],low=q.low?.[i],close=q.close?.[i],volume=q.volume?.[i];if(![open,high,low,close].every(v=>finite(v)&&v>0)||high<Math.max(open,close,low)||low>Math.min(open,close,high))continue;bars.set(time,{open,high,low,close,volume:finite(volume)&&volume>=0?volume:null});}
  const all=[];let continuous=[],incomplete=0,inProgress=0;
- for(const session of sessions){for(let start=session.start;start<session.end;start+=14400){const end=Math.min(start+14400,session.end);if(end>cutoff){if(start<cutoff)inProgress++;continue;}const slots=[];for(let t=start;t<end;t+=1800)if(!lunch(market,t,timezone))slots.push(t);if(!slots.length)continue;
+ for(const session of sessions){for(let start=session.start;start<session.end;start+=14400){const end=Math.min(start+14400,session.end),provisional=end>cutoff;if(provisional){if(start<cutoff)inProgress++;if(!includeLive||start>=cutoff)continue;}const slots=[];for(let t=start;t<end&&(!provisional||t<=cutoff);t+=1800)if(!lunch(market,t,timezone))slots.push(t);if(!slots.length)continue;
    if(slots.some(t=>!bars.has(t))){incomplete++;continuous=[];continue;}
    const values=slots.map(t=>bars.get(t)),last=values.at(-1),row={asOf:new Date(end*1000).toISOString(),start:new Date(start*1000).toISOString(),open:values[0].open,high:Math.max(...values.map(p=>p.high)),low:Math.min(...values.map(p=>p.low)),close:last.close,volume:values.every(p=>p.volume!=null)?values.reduce((s,p)=>s+p.volume,0):null,durationMinutes:(end-start)/60,bucket:Math.floor((start-session.start)/14400),shortened:end-start<14400};
-   all.push(row);continuous.push(row);
+   if(includeLive)Object.assign(row,{provisional,observedAt:new Date(Math.min(end,cutoff)*1000).toISOString()});all.push(row);continuous.push(row);
   }}
  return{bars:continuous,validBars:all.length,incomplete,inProgress,sessionStart:sessions.at(-1).start,sessionEnd:sessions.at(-1).end,sourceThrough:new Date(cutoff*1000).toISOString()};
 }
