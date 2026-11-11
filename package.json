@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/permissions.mjs && node tests/sharing-permissions.mjs && node tests/club-permissions.mjs && node tests/club-history-comments-permissions.mjs && node --test tests/research.test.mjs tests/market.test.mjs tests/live-market.test.mjs tests/stock-search.test.mjs tests/credit.test.mjs tests/quotes.test.mjs tests/journal-returns.test.mjs tests/sentiment.test.mjs tests/technical.test.mjs tests/etf.test.mjs tests/reversal.test.mjs tests/club.test.mjs tests/club-history.test.mjs tests/flow-view.test.mjs tests/full-flow.test.mjs tests/us-futures.test.mjs tests/kr-freshness.test.mjs tests/chart-guide.test.mjs tests/live-strategy.test.mjs tests/chart-viewport.test.mjs tests/trade-plan.test.mjs",
+    "test": "node tests/permissions.mjs && node tests/sharing-permissions.mjs && node tests/club-permissions.mjs && node tests/club-history-comments-permissions.mjs && node --test tests/research.test.mjs tests/market.test.mjs tests/live-market.test.mjs tests/stock-search.test.mjs tests/credit.test.mjs tests/quotes.test.mjs tests/journal-returns.test.mjs tests/sentiment.test.mjs tests/technical.test.mjs tests/etf.test.mjs tests/reversal.test.mjs tests/club.test.mjs tests/club-history.test.mjs tests/flow-view.test.mjs tests/full-flow.test.mjs tests/us-futures.test.mjs tests/kr-freshness.test.mjs tests/chart-guide.test.mjs tests/live-strategy.test.mjs tests/chart-viewport.test.mjs tests/trade-plan.test.mjs tests/entry-snapshot.test.mjs",
     "collect:credit": "node scripts/collect-credit.mjs",
     "collect:indicators": "node scripts/collect-indicators.mjs",
     "collect:sentiment": "node scripts/collect-sentiment.mjs",

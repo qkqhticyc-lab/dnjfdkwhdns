@@ -2,6 +2,7 @@ import{viewWindow,setWindow,zoomWindow,scalePrice}from'./chart-viewport.mjs';
 import{GUIDE_LINES}from'./chart-guide-core.mjs';
 import{STRATEGY_RULES}from'./strategy-core.mjs';
 import{buildTradePlan,PLAN_RULES}from'./trade-plan.mjs';
+import{entrySnapshot}from'./entry-snapshot.mjs';
 const GUIDE_RULES=STRATEGY_RULES.map(r=>['tp1','tp2'].includes(r.key)?{...r,label:r.key==='tp1'?'과거 신호 TP1 · 2R':'과거 신호 TP2 · 3R'}:r);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;},ns='http://www.w3.org/2000/svg',svg=(tag,attrs={},text)=>{const n=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,String(v));if(text!=null)n.textContent=text;return n;},num=(v,d=2)=>Number.isFinite(v)?v.toLocaleString('ko-KR',{maximumFractionDigits:d}):'—';
 const viewStates=new Map();
@@ -49,6 +50,19 @@ export function guideView(data,options={}){
   content.append(el('p',frame.sessionNote||'진행 봉 포함 · 30초마다 조회','guide-note'));
   if(frame.sourceThrough)content.append(el('p',(frame.timeframe==='4h'?'분봉 기준 ':'가격·일봉 조회 기준 ')+new Date(frame.sourceThrough).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST · 제공처 지연 가능','guide-note'));
   const trade=frames.at(-1).trade,plan=buildTradePlan(guide.frames.slice(0,window.end),{maxRiskPct:prefs.maxRiskPct}),price=v=>num(v,['KRW','JPY'].includes(data.currency)?0:2),distance=v=>Number.isFinite(v)?((v/plan.entry-1)*100>=0?'+':'')+num((v/plan.entry-1)*100,2)+'%':'—';
+  const signal=entrySnapshot(guide,frames.at(-1).asOf),signalCard=el('div',null,'guide-entry');signalCard.dataset.entryStatus=signal?.status||'none';
+  signalCard.append(el('h3',view.follow?'최근 진입 신호':'이 시점까지의 최근 진입 신호'));
+  if(signal){
+   const state=signal.status==='closed'?(signal.exitProvisional?'종료 신호 잠정':'종료된 신호'):signal.status==='active'?(signal.provisional?'잠정 진입 · 진행 봉':'진입 후 추적 중'):'추적 상태 미확인';
+   signalCard.append(el('span',state,'guide-entry-state'));const cells=el('div',null,'guide-entry-grid');
+   for(const[key,label,value,note]of[
+    ['date',signal.kind==='breakoutEntry'?'돌파 진입 신호':'진입 신호',when(signal.asOf,frame),frame.timeframe==='4h'?'4시간봉 · 현지 시간':'일봉'],
+    ['price','신호 기준 진입가',price(signal.entry)+' '+data.currency,signal.provisional?'진행 봉 가격 · 마감 전 변경 가능':'신호 발생 봉의 종가'],
+    ['reference',view.follow?'비교 가격':'표시 마지막 봉 가격',price(signal.referencePrice)+' '+data.currency,when(signal.referenceAt,frame)],
+    ['change','진입가 대비 등락',(signal.changePct>0?'+':'')+num(signal.changePct,2)+'%','실제 매매 수익률 아님']
+   ]){const cell=el('div');cell.dataset.entryValue=key;const valueNode=el('strong',value);if(key==='change')valueNode.className=signal.changePct>0?'guide-up':signal.changePct<0?'guide-down':'';cell.append(el('small',label),valueNode,el('small',note));cells.append(cell);}signalCard.append(cells);
+   signalCard.append(el('p',(signal.exitAt?'종료 신호: '+when(signal.exitAt,frame)+' · 이후 가격과도 비교하므로 보유 수익률을 뜻하지 않습니다. ':'')+'신호 진입가는 당시 봉 가격이며 실제 매수가가 아닙니다. 아래는 비교 가격으로 새로 진입할 때의 별도 검토입니다.','guide-note'));
+  }else signalCard.append(el('p','이 시점까지 수신된 이력에는 진입 신호가 없습니다.','guide-note'));content.append(signalCard);
   const planning=el('div',null,'guide-plan');planning.dataset.planStatus=plan.status;planning.dataset.planAsOf=plan.asOf;const planHead=el('div',null,'guide-plan-heading');planHead.append(el('h3',view.follow?'현재 가격 기준 매매 검토':'표시 마지막 봉 기준 매매 검토'));
   const limitLabel=el('label','손절폭 한도 '),limit=el('select');limit.setAttribute('aria-label','매매 검토 손절폭 한도');for(const n of[5,8,12]){const o=el('option',n+'%');o.value=n;limit.append(o);}limit.value=prefs.maxRiskPct;limit.onchange=()=>{prefs.maxRiskPct=+limit.value;redraw();};limitLabel.append(limit);planHead.append(limitLabel);planning.append(planHead);
   planning.append(el('strong',plan.label+(plan.provisional?' · 진행 봉 잠정':''),'guide-plan-status'),el('p',plan.reasons.join(' '),'guide-note'));
@@ -76,7 +90,7 @@ export function guideView(data,options={}){
   const viewLabel=el('span',when(frames[0].asOf,frame)+' ~ '+when(frames.at(-1).asOf,frame)+' · '+frames.length+'봉'+(view.follow?' · 최신 추적':' · 과거 조회'),'guide-window-label');navigation.append(viewLabel);content.append(navigation);
   const width=Math.max(320,Math.round(options.width||1000)),scroll=el('div',null,'guide-plot-scroll'),plot=svg('svg',{viewBox:'0 0 '+width+' 420',role:'img',tabindex:0,'aria-label':(frame.timeframe==='1d'?'일봉':'4시간봉')+' 가격과 이동평균·거래량·보조 신호. 좌우 방향키로 봉 조회.'});scroll.append(plot);content.append(scroll);
   const left=20,right=width-82,top=24,bottom=288,step=(right-left)/frames.length,x=i=>left+(i+.5)*step;
-  const values=[...frames.flatMap(p=>[p.high,p.low,p.close,...(prefs.averages?GUIDE_LINES.map(l=>p[l.key]):[]),...(prefs.levels?[p.high20,p.low20]:[])]),...(prefs.levels?[plan.stop,plan.tp1,plan.tp2]:[])].filter(v=>Number.isFinite(v)&&v>0),lo=Math.min(...values),hi=Math.max(...values),pad=(hi-lo||hi*.01)*.09,min=view.price?.min??lo-pad,max=view.price?.max??hi+pad,y=v=>bottom-(v-min)/(max-min)*(bottom-top);
+  const values=[...frames.flatMap(p=>[p.high,p.low,p.close,...(prefs.averages?GUIDE_LINES.map(l=>p[l.key]):[]),...(prefs.levels?[p.high20,p.low20]:[])]),...(prefs.levels?[plan.stop,plan.tp1,plan.tp2,signal?.status==='active'?signal.entry:null]:[])].filter(v=>Number.isFinite(v)&&v>0),lo=Math.min(...values),hi=Math.max(...values),pad=(hi-lo||hi*.01)*.09,min=view.price?.min??lo-pad,max=view.price?.max??hi+pad,y=v=>bottom-(v-min)/(max-min)*(bottom-top);
   plot.dataset.viewStart=frames[0].asOf;plot.dataset.viewEnd=frames.at(-1).asOf;plot.dataset.viewCount=String(frames.length);plot.dataset.priceMin=String(min);plot.dataset.priceMax=String(max);plot.dataset.follow=String(view.follow);
   for(let i=0;i<5;i++){const yy=top+(bottom-top)*i/4;plot.append(svg('line',{x1:left,x2:right,y1:yy,y2:yy,stroke:'#293b47'}),svg('text',{x:right+9,y:yy+4,fill:'#b2c4cf','font-size':11},num(max-(max-min)*i/4)));}
   const volMax=Math.max(1,...frames.map(p=>p.volume||0));plot.append(svg('text',{x:left,y:318,fill:'#b2c4cf','font-size':11},'거래량 · 1.5배 이상 강조'),svg('text',{x:right+9,y:340,fill:'#b2c4cf','font-size':10},num(volMax,0)));
@@ -86,6 +100,7 @@ export function guideView(data,options={}){
   if(options.mode==='line')line('close','#70d7bd');
   if(prefs.averages)for(const l of GUIDE_LINES)line(l.key,l.color);
   if(prefs.levels){line('high20','#73c9ac','5 4');line('low20','#96accc','5 4');for(const[key,label,color]of[['stop','손절 후보','#ff929c'],['tp1','1차 후보','#e5c26c'],['tp2','2차 후보','#dfb260']])if(Number.isFinite(plan[key])){const start=Math.max(0,frames.length-12);pricePane.append(svg('line',{'data-guide-target':key,x1:x(start),x2:right,y1:y(plan[key]),y2:y(plan[key]),stroke:color,'stroke-dasharray':'6 4'}),svg('text',{x:right-5,y:y(plan[key])-4,fill:color,'font-size':10,'text-anchor':'end'},label+' '+price(plan[key])));}}
+  if(prefs.levels&&signal?.status==='active'){const start=Math.max(0,frames.findIndex(p=>p.asOf>=signal.asOf));pricePane.append(svg('line',{'data-guide-entry-line':'',x1:x(start),x2:right,y1:y(signal.entry),y2:y(signal.entry),stroke:'#70d7bd','stroke-dasharray':'3 5'}),svg('text',{x:x(start)+4,y:y(signal.entry)+13,fill:'#70d7bd','font-size':10},'신호 진입가 '+price(signal.entry)));}
   const ticks=width<600?2:4;for(let i=0;i<=ticks;i++){const k=Math.round((frames.length-1)*i/ticks);plot.append(svg('text',{x:x(k),y:408,fill:'#b2c4cf','font-size':10,'text-anchor':i===0?'start':i===ticks?'end':'middle'},when(frames[k].asOf,frame)));}
   if(prefs.signals){const marked=frames.map((p,i)=>({p,i})).filter(v=>v.p.signals.length).slice(-12).reverse(),occupied=[];
    for(const {p,i} of marked){const rules=p.signals.map(k=>GUIDE_RULES.find(r=>r.key===k)),r=rules[0],event=guide.events.find(e=>e.asOf===p.asOf&&e.key===r.key),xx=x(i),anchor=y(p.high||p.close)-4,text=(p.provisional?'잠정 ':'')+r.label+(event?.count?' ×'+event.count:'')+(rules.length>1?' +'+(rules.length-1):''),width=Math.max(70,text.length*9),tx=Math.min(right-width/2,Math.max(left+width/2,xx)),group=svg('g',{'data-guide-signal':p.asOf});
