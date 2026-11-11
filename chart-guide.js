@@ -1,9 +1,11 @@
 import{viewWindow,setWindow,zoomWindow,scalePrice}from'./chart-viewport.mjs';
 import{GUIDE_LINES}from'./chart-guide-core.mjs';
-import{STRATEGY_RULES as GUIDE_RULES}from'./strategy-core.mjs';
+import{STRATEGY_RULES}from'./strategy-core.mjs';
+import{buildTradePlan,PLAN_RULES}from'./trade-plan.mjs';
+const GUIDE_RULES=STRATEGY_RULES.map(r=>['tp1','tp2'].includes(r.key)?{...r,label:r.key==='tp1'?'과거 신호 TP1 · 2R':'과거 신호 TP2 · 3R'}:r);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;},ns='http://www.w3.org/2000/svg',svg=(tag,attrs={},text)=>{const n=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,String(v));if(text!=null)n.textContent=text;return n;},num=(v,d=2)=>Number.isFinite(v)?v.toLocaleString('ko-KR',{maximumFractionDigits:d}):'—';
 const viewStates=new Map();
-const prefs={frame:'daily',count:120,averages:true,signals:true,levels:true};
+const prefs={frame:'daily',count:120,averages:true,signals:true,levels:true,maxRiskPct:8};
 const when=(at,frame)=>frame.timeframe==='1d'?at:new Date(at).toLocaleString('ko-KR',{timeZone:frame.timezone||'UTC',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const trendLabel={up:'상승 정렬',down:'하락 정렬',mixed:'혼조',insufficient:'이동평균 준비 중'};
 export function guideView(data,options={}){
@@ -46,11 +48,24 @@ export function guideView(data,options={}){
   if(frame.status==='stale'||data.status==='stale')content.append(el('p','새 자료 연결 지연 · 이전 분석과 원래 기준 시각을 유지합니다.','guide-notice'));
   content.append(el('p',frame.sessionNote||'진행 봉 포함 · 30초마다 조회','guide-note'));
   if(frame.sourceThrough)content.append(el('p',(frame.timeframe==='4h'?'분봉 기준 ':'가격·일봉 조회 기준 ')+new Date(frame.sourceThrough).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST · 제공처 지연 가능','guide-note'));
-  const dashboard=el('div',null,'guide-dashboard'),trade=frames.at(-1).trade;
-  for(const[label,value]of[['표시 마지막 봉 상태',trade?'진입 후 추적':'관찰'],['기준 진입가',num(trade?.entry,4)],['추적 손절선',num(trade?.stop,4)],['TP1 · 초기 2R',num(trade?.tp1,4)],['TP2 · 초기 3R',num(trade?.tp2,4)],['추가 진입',trade?trade.adds+'회':'—']]){const cell=el('div');cell.append(el('small',label),el('strong',value));dashboard.append(cell);}content.append(dashboard);
+  const trade=frames.at(-1).trade,plan=buildTradePlan(guide.frames.slice(0,window.end),{maxRiskPct:prefs.maxRiskPct}),price=v=>num(v,['KRW','JPY'].includes(data.currency)?0:2),distance=v=>Number.isFinite(v)?((v/plan.entry-1)*100>=0?'+':'')+num((v/plan.entry-1)*100,2)+'%':'—';
+  const planning=el('div',null,'guide-plan');planning.dataset.planStatus=plan.status;planning.dataset.planAsOf=plan.asOf;const planHead=el('div',null,'guide-plan-heading');planHead.append(el('h3',view.follow?'현재 가격 기준 매매 검토':'표시 마지막 봉 기준 매매 검토'));
+  const limitLabel=el('label','손절폭 한도 '),limit=el('select');limit.setAttribute('aria-label','매매 검토 손절폭 한도');for(const n of[5,8,12]){const o=el('option',n+'%');o.value=n;limit.append(o);}limit.value=prefs.maxRiskPct;limit.onchange=()=>{prefs.maxRiskPct=+limit.value;redraw();};limitLabel.append(limit);planHead.append(limitLabel);planning.append(planHead);
+  planning.append(el('strong',plan.label+(plan.provisional?' · 진행 봉 잠정':''),'guide-plan-status'),el('p',plan.reasons.join(' '),'guide-note'));
+  const dashboard=el('div',null,'guide-dashboard');
+  for(const[key,label,value,note]of[
+   ['entry','검토 기준가',price(plan.entry),'실제 체결가 아님'],
+   ['support','가까운 지지 기준',price(plan.support?.value),plan.support?plan.support.kind+' · '+when(plan.support.asOf,frame):'확인 불가'],
+   ['stop','손절 후보',price(plan.stop),distance(plan.stop)+' · 기준선 이탈 확인'],
+   ['tp1','1차 목표 후보',price(plan.tp1),plan.first?distance(plan.tp1)+' · '+plan.first.kind:'확인 불가'],
+   ['tp2','2차 목표 후보',price(plan.tp2),plan.second?distance(plan.tp2)+' · '+plan.second.kind:'다음 저항 미확인'],
+   ['rr','1차 후보 손익비',Number.isFinite(plan.rr)?'1 : '+num(plan.rr,2):'—','수익 여지 ÷ 손절폭']
+  ]){const cell=el('div');cell.dataset.planValue=key;cell.append(el('small',label),el('strong',value),el('small',note));dashboard.append(cell);}planning.append(dashboard);
+  if(plan.status==='wait'&&plan.pullback?.low)planning.append(el('p','눌림 관찰 구간 '+price(plan.pullback.low)+' ~ '+price(plan.pullback.high)+' '+data.currency+' · 자동 매수 구간이 아닙니다. 지지·거래량 회복 확인 후 다시 계산하세요.','guide-plan-pullback'));
+  planning.append(el('p','기준 '+when(plan.asOf,frame)+' · 선택 봉 주기의 ATR·지지·저항으로 매번 재계산합니다. 이미 보유한 포지션의 확정 손절선을 대체하지 않습니다. 한도를 바꿔도 가격선을 억지로 좁히지 않습니다.','guide-note'));content.append(planning);
+  if(trade){const legacy=el('details',null,'guide-legacy');legacy.append(el('summary','과거 진입 신호의 가상 추적 보기 (기존 2R·3R 규칙)'),el('p',`신호 ${when(trade.started,frame)} · 진입 ${price(trade.entry)} · 추적 손절 ${price(trade.stop)} · TP1 ${price(trade.tp1)} · TP2 ${price(trade.tp2)}. 과거 신호 검토용이며 위의 현재 가격 계획과 다릅니다.`,'guide-note'));content.append(legacy);}
   if(data.reversal?.label)content.append(el('p',data.reversal.label+' · 20·60봉선 기준'+(last.provisional?' · 진행 봉 포함 잠정 판정':''),'guide-note'));
   if(data.metrics)content.append(el('p','추세 강도 ADX(14) '+num(data.metrics.adx,1)+' · +DI '+num(data.metrics.plusDI,1)+' / −DI '+num(data.metrics.minusDI,1)+' · ADX 25 이상은 강한 추세, 방향은 위 추세 판정과 별도로 확인하세요.','guide-note'));
-  if(trade)content.append(el('p','진입 신호 종가 기준의 가상 추적입니다. 실제 보유·체결 내역이 아닙니다. 목표가와 초기 위험 거리는 고정, 추적 손절선은 다음 봉부터 적용합니다.','guide-note'));
   if(guide.missingLines.length)content.append(el('p',guide.missingLines.join(' · ')+' 자료 부족 — '+guide.observations+'개 봉만 수신했습니다.','guide-notice'));
   const navigation=el('div',null,'guide-navigation');
   const action=(key,text,run)=>{const b=el('button',text);b.type='button';b.dataset.guideAction=key;b.onclick=()=>{run();redraw();};navigation.append(b);return b;};
@@ -61,7 +76,7 @@ export function guideView(data,options={}){
   const viewLabel=el('span',when(frames[0].asOf,frame)+' ~ '+when(frames.at(-1).asOf,frame)+' · '+frames.length+'봉'+(view.follow?' · 최신 추적':' · 과거 조회'),'guide-window-label');navigation.append(viewLabel);content.append(navigation);
   const width=Math.max(320,Math.round(options.width||1000)),scroll=el('div',null,'guide-plot-scroll'),plot=svg('svg',{viewBox:'0 0 '+width+' 420',role:'img',tabindex:0,'aria-label':(frame.timeframe==='1d'?'일봉':'4시간봉')+' 가격과 이동평균·거래량·보조 신호. 좌우 방향키로 봉 조회.'});scroll.append(plot);content.append(scroll);
   const left=20,right=width-82,top=24,bottom=288,step=(right-left)/frames.length,x=i=>left+(i+.5)*step;
-  const values=[...frames.flatMap(p=>[p.high,p.low,p.close,...(prefs.averages?GUIDE_LINES.map(l=>p[l.key]):[]),...(prefs.levels?[p.high20,p.low20]:[])]),...(prefs.levels&&trade?[trade.stop,trade.tp1,trade.tp2]:[])].filter(v=>Number.isFinite(v)&&v>0),lo=Math.min(...values),hi=Math.max(...values),pad=(hi-lo||hi*.01)*.09,min=view.price?.min??lo-pad,max=view.price?.max??hi+pad,y=v=>bottom-(v-min)/(max-min)*(bottom-top);
+  const values=[...frames.flatMap(p=>[p.high,p.low,p.close,...(prefs.averages?GUIDE_LINES.map(l=>p[l.key]):[]),...(prefs.levels?[p.high20,p.low20]:[])]),...(prefs.levels?[plan.stop,plan.tp1,plan.tp2]:[])].filter(v=>Number.isFinite(v)&&v>0),lo=Math.min(...values),hi=Math.max(...values),pad=(hi-lo||hi*.01)*.09,min=view.price?.min??lo-pad,max=view.price?.max??hi+pad,y=v=>bottom-(v-min)/(max-min)*(bottom-top);
   plot.dataset.viewStart=frames[0].asOf;plot.dataset.viewEnd=frames.at(-1).asOf;plot.dataset.viewCount=String(frames.length);plot.dataset.priceMin=String(min);plot.dataset.priceMax=String(max);plot.dataset.follow=String(view.follow);
   for(let i=0;i<5;i++){const yy=top+(bottom-top)*i/4;plot.append(svg('line',{x1:left,x2:right,y1:yy,y2:yy,stroke:'#293b47'}),svg('text',{x:right+9,y:yy+4,fill:'#b2c4cf','font-size':11},num(max-(max-min)*i/4)));}
   const volMax=Math.max(1,...frames.map(p=>p.volume||0));plot.append(svg('text',{x:left,y:318,fill:'#b2c4cf','font-size':11},'거래량 · 1.5배 이상 강조'),svg('text',{x:right+9,y:340,fill:'#b2c4cf','font-size':10},num(volMax,0)));
@@ -70,7 +85,7 @@ export function guideView(data,options={}){
   function line(key,color,dash){let path='',open=false;for(const[p,i]of frames.map((p,i)=>[p,i])){if(!Number.isFinite(p[key])){open=false;continue;}path+=(open?'L':'M')+x(i).toFixed(2)+','+y(p[key]).toFixed(2)+' ';open=true;}if(path)pricePane.append(svg('path',{'data-guide-line':key,d:path,fill:'none',stroke:color,'stroke-width':key==='sma200'?2.5:1.5,...(dash?{'stroke-dasharray':dash}:{})}));}
   if(options.mode==='line')line('close','#70d7bd');
   if(prefs.averages)for(const l of GUIDE_LINES)line(l.key,l.color);
-  if(prefs.levels){line('high20','#73c9ac','5 4');line('low20','#96accc','5 4');if(trade)for(const[key,label,color]of[['stop','손절','#ff929c'],['tp1','TP1','#e5c26c'],['tp2','TP2','#dfb260']]){const start=Math.max(0,frames.findIndex(p=>p.asOf>=trade.started));pricePane.append(svg('line',{'data-guide-target':key,x1:x(start),x2:right,y1:y(trade[key]),y2:y(trade[key]),stroke:color,'stroke-dasharray':'6 4'}),svg('text',{x:right-5,y:y(trade[key])-4,fill:color,'font-size':10,'text-anchor':'end'},label+' '+num(trade[key],4)));}}
+  if(prefs.levels){line('high20','#73c9ac','5 4');line('low20','#96accc','5 4');for(const[key,label,color]of[['stop','손절 후보','#ff929c'],['tp1','1차 후보','#e5c26c'],['tp2','2차 후보','#dfb260']])if(Number.isFinite(plan[key])){const start=Math.max(0,frames.length-12);pricePane.append(svg('line',{'data-guide-target':key,x1:x(start),x2:right,y1:y(plan[key]),y2:y(plan[key]),stroke:color,'stroke-dasharray':'6 4'}),svg('text',{x:right-5,y:y(plan[key])-4,fill:color,'font-size':10,'text-anchor':'end'},label+' '+price(plan[key])));}}
   const ticks=width<600?2:4;for(let i=0;i<=ticks;i++){const k=Math.round((frames.length-1)*i/ticks);plot.append(svg('text',{x:x(k),y:408,fill:'#b2c4cf','font-size':10,'text-anchor':i===0?'start':i===ticks?'end':'middle'},when(frames[k].asOf,frame)));}
   if(prefs.signals){const marked=frames.map((p,i)=>({p,i})).filter(v=>v.p.signals.length).slice(-12).reverse(),occupied=[];
    for(const {p,i} of marked){const rules=p.signals.map(k=>GUIDE_RULES.find(r=>r.key===k)),r=rules[0],event=guide.events.find(e=>e.asOf===p.asOf&&e.key===r.key),xx=x(i),anchor=y(p.high||p.close)-4,text=(p.provisional?'잠정 ':'')+r.label+(event?.count?' ×'+event.count:'')+(rules.length>1?' +'+(rules.length-1):''),width=Math.max(70,text.length*9),tx=Math.min(right-width/2,Math.max(left+width/2,xx)),group=svg('g',{'data-guide-signal':p.asOf});
@@ -106,6 +121,8 @@ export function guideView(data,options={}){
  for(const rule of GUIDE_RULES)methods.append(el('p',rule.label+': '+rule.rule));
  methods.append(el('p','RSI·ATR은 14봉 Wilder 방식. 거래량 비교에서 현재 봉은 제외하며, 4시간봉은 같은 시간대·같은 길이의 직전 20개 봉을 사용합니다. 진행 봉은 아직 누적 중인 거래량으로 비교하며 마감 거래량으로 추정하지 않습니다. 매 조회마다 과거부터 다시 계산하므로 잠정 신호를 영구 저장하지 않습니다.'));
  methods.append(el('p','신호는 해당 봉까지 알려진 자료만 사용합니다. 미래 봉을 보고 과거에 신호를 옮겨 붙이지 않습니다. 다만 원자료 정정·분할 보정·조회 이력 변경으로 재계산 값은 달라질 수 있습니다. 신호 종가는 체결가가 아니며, 거래비용을 반영한 백테스트나 수익률 검증은 아직 하지 않았습니다.'));
- methods.append(el('p','캡처의 설명을 참고한 독립 규칙이며 유료 지표의 원본 수식과 동일하지 않습니다. 초기 손절은 최근 10봉 저가와 진입가−1.5ATR 중 낮은 가격(최소 진입가의 1%). TP1=진입가+2R, TP2=진입가+3R은 자체 선택입니다. 장중 손절·목표가 동시 접촉의 체결 순서는 추정하지 않습니다. 사선 채널·@SR의 비공개 계산식은 구현하지 않았습니다.'));
+ methods.append(el('h4','현재 가격 기준 매매 검토'),el('p',PLAN_RULES),el('p','일봉과 4시간봉은 각 주기의 마감봉·ATR로 따로 계산합니다. 진행 봉 현재가로 돌파 여부와 가격대는 바뀔 수 있습니다. 2봉 확인이 필요한 고점·저점은 확인 전에는 사용하지 않습니다. 저항이 하나뿐이면 2차 목표를 만들지 않습니다. 갭·슬리피지로 실제 매도 가격은 손절 후보보다 불리할 수 있습니다.'));
+ methods.append(el('p','캡처를 참고한 독립 규칙이며 유료 지표의 원본 수식과 동일하지 않습니다. 과거 신호의 가상 추적은 기존 규칙(최근 10봉 저가와 진입가−1.5ATR 중 낮은 손절, 2R·3R 목표)을 보존하며 접힌 영역에서만 가격을 보여줍니다. 차트의 후보 가격선은 새 매매 검토 기준입니다. 과거 TP 신호는 기존 규칙으로 계산합니다. 사선 채널·@SR의 비공개 계산식은 구현하지 않았습니다.'));
+ for(const[label,url]of[['지지·저항 개념 참고','https://www.cmegroup.com/education/courses/technical-analysis/support-and-resistance'],['ATR·목표·손절 활용 참고','https://www.schwab.com/learn/story/average-true-range-indicator-and-volatility']]){const a=el('a',label+' ↗');a.href=url;a.target='_blank';a.rel='noopener noreferrer';methods.append(a);}
  for(const[label,url]of[['EMA 계산 참고','https://www.tradingview.com/support/solutions/43000592270-exponential-moving-average/'],['ATR 계산 참고','https://www.tradingview.com/support/solutions/43000501823-average-true-range-atr/'],['확정봉·리페인팅 참고','https://www.tradingview.com/pine-script-docs/concepts/repainting/']]){const a=el('a',label+' ↗');a.href=url;a.target='_blank';a.rel='noopener noreferrer';methods.append(a);}section.append(methods);draw();return section;
 }
