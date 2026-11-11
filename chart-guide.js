@@ -71,13 +71,21 @@ export function guideView(data,options={}){
   for(const[key,label,value,note]of[
    ['entry','검토 기준가',price(plan.entry),'실제 체결가 아님'],
    ['support','가까운 지지 기준',price(plan.support?.value),plan.support?plan.support.kind+' · '+when(plan.support.asOf,frame):'확인 불가'],
-   ['stop','손절 후보',price(plan.stop),distance(plan.stop)+' · 기준선 이탈 확인'],
+   ['stop','손절 후보',price(plan.stop),distance(plan.stop)+' · '+(plan.stopNote||'기준선 이탈 확인')],
    ['tp1','1차 목표 후보',price(plan.tp1),plan.first?distance(plan.tp1)+' · '+plan.first.kind:'확인 불가'],
-   ['tp2','2차 목표 후보',price(plan.tp2),plan.second?distance(plan.tp2)+' · '+plan.second.kind:'다음 저항 미확인'],
+   ['tp2','2차 목표 후보',price(plan.tp2),plan.second?distance(plan.tp2)+' · '+plan.second.kind+' · 1차 통과 후 재검토':'다음 저항 미확인'],
    ['rr','1차 후보 손익비',Number.isFinite(plan.rr)?'1 : '+num(plan.rr,2):'—','수익 여지 ÷ 손절폭']
   ]){const cell=el('div');cell.dataset.planValue=key;cell.append(el('small',label),el('strong',value),el('small',note));dashboard.append(cell);}planning.append(dashboard);
+  if(plan.context){const c=plan.context,explain=el('details',null,'guide-plan-factors');explain.append(el('summary','산정 근거 · '+c.label+' / RSI '+num(c.rsi,1)));
+   const facts=[
+    ['추세',c.label+' · EMA21 5봉 변화 '+num(c.slope,2)+'% · ADX '+num(c.adx,1)+' (+DI '+num(c.plusDI,1)+' / −DI '+num(c.minusDI,1)+')'],
+    ['모멘텀','RSI '+num(c.rsi,1)+' · 3봉 변화 '+num(c.rsiChange,1)+' · '+(c.defensive?'보수적인 목표 범위 적용':'상승 국면 목표 범위 적용')],
+    ['거래량',num(c.volumeRatio,2)+'배 · 최근 마감봉 '+(c.volumeAsOf?when(c.volumeAsOf,frame):'자료 없음')+' 기준. 진행 봉 거래량은 미완성이어서 제외'],
+    ['목표','현재가 위 '+c.multipliers.join(' / ')+'ATR 범위와 가까운 저항 중 먼저 만나는 가격 직전. RSI를 목표 주가로 환산한 값이 아닙니다.'],
+    ['손절',plan.stopNote+' · '+plan.support.kind+'. 손절폭 한도를 넘으면 가격을 임의로 좁히지 않고 대기합니다.']
+   ];for(const[label,text]of facts)explain.append(el('p',label+': '+text,'guide-note'));planning.append(explain);}
   if(plan.status==='wait'&&plan.pullback?.low)planning.append(el('p','눌림 관찰 구간 '+price(plan.pullback.low)+' ~ '+price(plan.pullback.high)+' '+data.currency+' · 자동 매수 구간이 아닙니다. 지지·거래량 회복 확인 후 다시 계산하세요.','guide-plan-pullback'));
-  planning.append(el('p','기준 '+when(plan.asOf,frame)+' · 선택 봉 주기의 ATR·지지·저항으로 매번 재계산합니다. 이미 보유한 포지션의 확정 손절선을 대체하지 않습니다. 한도를 바꿔도 가격선을 억지로 좁히지 않습니다.','guide-note'));content.append(planning);
+  planning.append(el('p','기준 '+when(plan.asOf,frame)+' · 추세·RSI·ADX·마감봉 거래량·ATR·지지·저항을 함께 검토한 실험 규칙입니다. 도달 확률이 검증된 예측값이 아니며 이미 보유한 포지션의 확정 손절선을 대체하지 않습니다.','guide-note'));content.append(planning);
   if(trade){const legacy=el('details',null,'guide-legacy');legacy.append(el('summary','과거 진입 신호의 가상 추적 보기 (기존 2R·3R 규칙)'),el('p',`신호 ${when(trade.started,frame)} · 진입 ${price(trade.entry)} · 추적 손절 ${price(trade.stop)} · TP1 ${price(trade.tp1)} · TP2 ${price(trade.tp2)}. 과거 신호 검토용이며 위의 현재 가격 계획과 다릅니다.`,'guide-note'));content.append(legacy);}
   if(data.reversal?.label)content.append(el('p',data.reversal.label+' · 20·60봉선 기준'+(last.provisional?' · 진행 봉 포함 잠정 판정':''),'guide-note'));
   if(data.metrics)content.append(el('p','추세 강도 ADX(14) '+num(data.metrics.adx,1)+' · +DI '+num(data.metrics.plusDI,1)+' / −DI '+num(data.metrics.minusDI,1)+' · ADX 25 이상은 강한 추세, 방향은 위 추세 판정과 별도로 확인하세요.','guide-note'));

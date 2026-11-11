@@ -15,7 +15,7 @@ try{
  assert.equal(await p.locator('.guide-legacy').getAttribute('open'),null);assert.equal(await p.locator('[data-guide-target=tp2]').count(),expected.tp2==null?0:1);
  await p.locator('[aria-label="매매 검토 손절폭 한도"]').selectOption('5');assert.equal(await value('stop'),format(expected.stop));await p.clock.runFor(30500);assert.equal(await p.locator('[aria-label="매매 검토 손절폭 한도"]').inputValue(),'5');
  await p.locator('[data-guide-action=back]').click();const end=await p.locator('.guide-plot-scroll svg').getAttribute('data-view-end');assert.equal(await p.locator('.guide-plan').getAttribute('data-plan-as-of'),end);const historic=buildTradePlan(fixtures.daily.guide.frames.filter(v=>v.asOf<=end));assert.equal(await value('stop'),format(historic.stop));await p.locator('[data-guide-action=latest]').click();assert.equal(await value('stop'),format(expected.stop));
- await p.locator('.guide-plan').screenshot({path:'outputs/trade-plan-desktop.png'});
+ await p.locator('.guide-plan-factors summary').click();assert.match(await p.locator('.guide-plan-factors').textContent(),/RSI.*ADX/s);assert.match(await p.locator('.guide-plan-factors').textContent(),/마감봉/);await p.locator('.guide-plan').screenshot({path:'outputs/trade-plan-desktop.png'});
  await p.locator('[data-guide-frame=fourHour]').click();await p.waitForFunction(()=>document.querySelector('#chart-info').textContent.includes('4시간봉')&&document.querySelector('.guide-plan'));
  const four=buildTradePlan(fixtures.fourHour.guide.frames);assert.equal(await value('stop'),format(four.stop));assert.notEqual(await value('stop'),format(expected.stop));
  for(const width of[390,320]){await p.setViewportSize({width,height:900});assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
