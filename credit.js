@@ -26,11 +26,13 @@ export async function initCredit(){
  }
  async function load(){
   if(busy)return;busy=true;$('credit-refresh').disabled=true;
-  try{const r=await fetch('./data/credit.json',{cache:'no-store'});if(!r.ok)throw Error();const next=await r.json();if(!validateCreditData(next))throw Error();data=next;
+  try{const r=await fetch('./data/credit.json',{cache:'no-store'});if(!r.ok)throw Error();const next=await r.json();if(!validateCreditData(next)||data&&(next.asOf<data.asOf||next.asOf===data.asOf&&Date.parse(next.collectedAt)<Date.parse(data.collectedAt)||data.sourceProvider==='KOFIA'&&next.sourceProvider!=='KOFIA'))throw Error();data=next;
    const current=data.points.at(-1),previous=data.points.at(-2);$('credit-asof').textContent=`자료 기준 ${dateText(data.asOf)}`;
    for(const s of series){const value=s.key==='ratio'?pct(creditRatio(current)):money(current[s.key]),delta=s.key==='ratio'?creditRatio(current)-creditRatio(previous):current[s.key]-previous[s.key];$('credit-latest-'+s.key).textContent=value;const n=$('credit-delta-'+s.key);n.textContent='직전 제공일 대비 '+signed(delta,s.key==='ratio'?'%p':'억원');n.className=delta>0?'up':delta<0?'down':'';}
    $('credit-collected').textContent='수집 '+new Date(data.collectedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' (한국 시간)';
-   const warn=$('credit-warning');warn.hidden=data.status==='ok';warn.textContent='최근 수집에 실패하여 마지막 정상 자료를 표시합니다. 자료 기준일과 수집 시각을 확인해 주세요.';render();
+   const source=$('credit-data-source');source.href=data.source;source.textContent=data.sourceProvider==='KOFIA'?'금융투자협회 FreeSIS · 직접 수집 ↗':'이전 제공처 자료 ↗';
+   const detail=$('credit-source-breakdown'),raw=n=>(n*100).toLocaleString('ko-KR',{maximumFractionDigits:0});detail.textContent=data.sourceProvider==='KOFIA'?`금투협 원자료 대조 (단위 백만원): 신용거래융자 전체 ${raw(current.credit)} = 유가증권 ${raw(current.creditKospi)} + 코스닥 ${raw(current.creditKosdaq)}. 고객예탁금 ${raw(current.deposit)}. 예탁증권 담보융자는 별도 항목입니다.`:'이전 제공처 자료입니다. 최신 금투협 원자료 연결 후 전환됩니다.';
+   const mismatch=data.sourceDates&&data.sourceDates.credit!==data.sourceDates.deposit,warn=$('credit-warning');warn.hidden=data.status==='ok'&&!mismatch;warn.textContent=data.status==='stale'?'최근 수집에 실패하거나 이전 날짜가 응답되어 마지막 정상 자료를 표시합니다. 자료 기준일과 수집 시각을 확인해 주세요.':mismatch?`신용융자 최신 ${data.sourceDates.credit} / 예탁금 최신 ${data.sourceDates.deposit}. 비율과 차트는 두 자료가 함께 제공된 ${data.asOf} 기준입니다.`:'';render();
   }catch{const warn=$('credit-warning');warn.hidden=false;warn.textContent=data?'새 자료를 확인하지 못했습니다. 현재 표시 중인 자료를 유지합니다.':'신용잔고 자료를 불러오지 못했습니다. 잠시 후 자료 다시 불러오기를 눌러 주세요.';}
   finally{busy=false;$('credit-refresh').disabled=false;}
  }
