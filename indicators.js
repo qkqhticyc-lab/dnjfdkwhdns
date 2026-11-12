@@ -5,7 +5,8 @@ const num=(n,d=2)=>Number.isFinite(n)?n.toLocaleString('ko-KR',{minimumFractionD
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const kst=at=>new Date(at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false});
 const localLabel=at=>at?.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5');
-const coord=at=>Date.UTC(+at.slice(0,4),+at.slice(4,6)-1,+at.slice(6,8),+at.slice(8,10),+at.slice(10,12));
+// Equal date widths prevent today's denser quotes from squeezing older sessions.
+function datePositions(points=[]){const days=[...new Set(points.map(p=>p.at.slice(0,8)))],minute=p=>+p.at.slice(8,10)*60+(+p.at.slice(10,12));const bounds=days.map(d=>{const a=points.filter(p=>p.at.startsWith(d));return[minute(a[0]),minute(a.at(-1))];});return points.map(p=>{const d=days.indexOf(p.at.slice(0,8)),[lo,hi]=bounds[d];return{x:d*1.08+(minute(p)-lo)/(hi-lo||1),value:p.price,at:p.at};});}
 export async function initIndicators(config){
  const grid=document.getElementById('indicator-grid'),warning=document.getElementById('indicator-warning'),button=document.getElementById('indicator-refresh');let history,intraday,live,busy=false,mode='day';const selections=new Map();
  const headers={apikey:config.supabase.publishableKey,Authorization:'Bearer '+config.supabase.edgeAnonKey};
@@ -21,7 +22,7 @@ export async function initIndicators(config){
    card.append(el('p',item.change==null?'전일 대비 미제공':(def.kind==='yield'?sign(item.bp,1)+'bp':sign(item.change,def.digits))+' ('+sign(item.changePercent)+'%)',item.change>=0?'up':'down'));
    card.append(el('p',current?`시세 ${kst(current.quoteAt)} KST`:`일봉 기준 ${old.asOf}`,'indicator-note'),el('p',`${def.unit}${current?.contract?' · '+current.contract+' 근월물':''}`,'indicator-note'));
    const series=intraday?.items?.find(p=>p.id===def.id),merged=mergeThreeDay(series,current);
-   const points=mode==='day'?merged?.map((p,i)=>({x:i,value:p.price,at:p.at})):old?.points?.filter(p=>Number.isFinite(p.close)&&p.close>0).map((p,i)=>({x:i,value:p.close,at:p.date}));
+   const points=mode==='day'?datePositions(merged):old?.points?.filter(p=>Number.isFinite(p.close)&&p.close>0).map((p,i)=>({x:i,value:p.close,at:p.date}));
    if(points?.length){
     const low=Math.min(...points.map(p=>p.value)),high=Math.max(...points.map(p=>p.value)),span=high-low||1,minX=points[0].x,maxX=points.at(-1).x;
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 300 80');svg.setAttribute('role','img');svg.setAttribute('aria-label',def.name+(mode==='day'?' 최근 3일 분봉 추이':' 최근 3개월 일봉 추이'));
@@ -32,7 +33,7 @@ export async function initIndicators(config){
     if(mode==='day'){
      card.append(el('p',(series?.provider==='yahoo'?'Yahoo 5분봉 · 30분 수집 보완 · 현재 시세와 별도 출처':'네이버 분봉')+(series?.status==='stale'?' · 과거 구간 갱신 지연':''),'indicator-note'));
      card.append(el('p',`분봉 ${localLabel(points[0].at)} ~ ${localLabel(points.at(-1).at)} · 현지시간`,'indicator-note'));
-     const label=el('label',null,'indicator-cursor'),out=el('span'),slider=el('input');slider.type='range';slider.min='0';slider.max=String(points.length-1);slider.dataset.indicatorCursor=def.id;slider.setAttribute('aria-label',def.name+' 분봉 시간 선택');const selected=selections.get(def.id),index=selected?points.findIndex(p=>p.at===selected):-1;slider.value=String(index>=0?index:points.length-1);const select=()=>{const p=points[Number(slider.value)];selections.set(def.id,p.at);out.textContent=`${localLabel(p.at)} · ${num(p.value,def.digits)}${def.kind==='yield'?'%':''} (현지)`;};select();slider.oninput=select;svg.onclick=e=>{const r=svg.getBoundingClientRect(),x=minX+Math.max(0,Math.min(1,((e.clientX-r.left)/r.width*300-2)/296))*(maxX-minX);slider.value=String(points.reduce((best,p,i)=>Math.abs(p.x-x)<Math.abs(points[best].x-x)?i:best,0));select();};label.append(out,slider);card.append(label);
+     const label=el('label',null,'indicator-cursor'),out=el('span'),slider=el('input');slider.type='range';slider.min='0';slider.max=String(points.length-1);slider.dataset.indicatorCursor=def.id;slider.setAttribute('aria-label',def.name+' 분봉 시간 선택');const selected=selections.get(def.id),index=selected?points.findIndex(p=>p.at===selected):-1;slider.value=String(index>=0?index:points.length-1);const select=(user=false)=>{const p=points[Number(slider.value)];if(user)selections.set(def.id,p.at);out.textContent=`${localLabel(p.at)} · ${num(p.value,def.digits)}${def.kind==='yield'?'%':''} (현지)`;};select();slider.oninput=()=>select(true);svg.onclick=e=>{const r=svg.getBoundingClientRect(),x=minX+Math.max(0,Math.min(1,((e.clientX-r.left)/r.width*300-2)/296))*(maxX-minX);slider.value=String(points.reduce((best,p,i)=>Math.abs(p.x-x)<Math.abs(points[best].x-x)?i:best,0));select(true);};label.append(out,slider);card.append(label);
     }else{
      const range=el('div',null,'indicator-range'),bar=el('div'),dot=el('i');dot.style.left=Math.max(0,Math.min(100,(old.price-low)/span*100))+'%';bar.append(dot);range.append(el('span',num(low,def.digits)),bar,el('span',num(high,def.digits)));card.append(range,el('p','3개월 일봉 범위 · 일봉 최근값 위치','indicator-range-label'));
     }
