@@ -3,10 +3,14 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_run:
+    workflows: ['Scan listed stocks']
+    types: [completed]
   schedule:
     - cron: '17,47 * * * *'
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 concurrency:
@@ -14,6 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -38,7 +43,15 @@ jobs:
       - run: npm run collect:credit
       - run: npm run collect:indicators
       - run: node scripts/collect-indicator-history.mjs
-      - run: node scripts/collect-screener.mjs
+      - name: Download latest completed full scan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scan_id=$(gh run list --workflow screener.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$scan_id" ]; then
+            gh run download "$scan_id" --name screener-full --dir .cache/screener-full || echo 'Full scan download unavailable; keeping published data.'
+          fi
+      - run: node scripts/load-screener.mjs
       - run: npm run collect:sentiment
       - run: npm run collect:etfs
       - run: node scripts/refresh-club.mjs

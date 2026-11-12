@@ -1,0 +1,88 @@
+name: Scan listed stocks
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'screener-core.mjs'
+      - 'strategy-core.mjs'
+      - 'chart-guide-core.mjs'
+      - 'technical-core.mjs'
+      - 'risk-levels.mjs'
+      - 'entry-snapshot.mjs'
+      - 'live-chart-core.mjs'
+      - 'scripts/screener-*.mjs'
+      - '.github/workflows/screener.yml'
+  schedule:
+    - cron: '15 8,22 * * 1-5'
+permissions:
+  contents: read
+concurrency:
+  group: listed-stock-screener
+  cancel-in-progress: false
+jobs:
+  universe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/screener-universe.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screener-universe
+          path: .cache/screener/universe.json
+          retention-days: 7
+          include-hidden-files: true
+  scan:
+    needs: universe
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: screener-universe
+          path: .cache/screener
+      - run: node scripts/screener-shard.mjs ${{ matrix.shard }} 12
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screener-shard-${{ matrix.shard }}
+          path: .cache/screener/results/shard-${{ matrix.shard }}.json
+          retention-days: 7
+          include-hidden-files: true
+  merge:
+    needs: scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: screener-universe
+          path: .cache/screener
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: screener-shard-*
+          path: .cache/screener/results
+          merge-multiple: true
+      - run: node scripts/screener-merge.mjs 12
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screener-full
+          path: .cache/screener/publish/screener.json
+          retention-days: 7
+          include-hidden-files: true

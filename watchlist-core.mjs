@@ -2,7 +2,7 @@ export const WATCH_KEY='investment-chart-watchlist-v1';
 export function watchItem(value){
  if(!value||!['KR','US','HK','JP'].includes(value.market))throw Error('지원하지 않는 시장입니다.');
  const {market}=value,symbol=String(value.symbol||'').trim().toUpperCase();
- if(!(market==='KR'?/^\d{6}$/:market==='HK'?/^\d{4,5}$/:market==='JP'?/^\d{4}$/:/^[A-Z0-9][A-Z0-9.^=-]{0,19}$/).test(symbol))throw Error('종목코드를 확인해 주세요.');
+ if(!(market==='KR'?/^[0-9A-Z]{6}$/:market==='HK'?/^\d{4,5}$/:market==='JP'?/^[A-Z0-9]{4,5}$/:/^[A-Z0-9][A-Z0-9.^=-]{0,19}$/).test(symbol))throw Error('종목코드를 확인해 주세요.');
  const name=String(value.name||symbol).trim(),exchange=String(value.exchange||'').trim(),currency={KR:'KRW',US:'USD',HK:'HKD',JP:'JPY'}[market];
  if(!name||name.length>120||exchange.length>80)throw Error('종목 이름이 너무 깁니다.');
  return {market,symbol,name,exchange,currency};

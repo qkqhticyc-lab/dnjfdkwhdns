@@ -1,0 +1,3 @@
+import{mergeScreenShards}from'../screener-core.mjs';import{mkdir,readFile,writeFile}from'node:fs/promises';
+const count=Number(process.argv[2]||12),universe=JSON.parse(await readFile('.cache/screener/universe.json','utf8')),parts=[];for(let i=0;i<count;i++)parts.push(JSON.parse(await readFile(`.cache/screener/results/shard-${i}.json`,'utf8')));
+const result=mergeScreenShards(universe,parts,count);await mkdir('.cache/screener/publish',{recursive:true});await writeFile('.cache/screener/publish/screener.json',JSON.stringify(result));console.log(JSON.stringify({total:result.items.length,ok:result.items.filter(p=>p.status==='ok').length,coverage:result.coverage}));
