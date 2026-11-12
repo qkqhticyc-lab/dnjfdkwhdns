@@ -1,12 +1,13 @@
 import {analyzeGuide} from './chart-guide-core.mjs';
+import {riskLevels} from './risk-levels.mjs';
 // Independent, published rules. No claim to reproduce Lazy Alpha's private formula.
 export const STRATEGY_RULES=[
  ['setup','셋업','EMA8 > EMA14 > EMA21, 종가 > EMA14.'],
  ['entry','진입','셋업에서 EMA21 상향 교차 또는 EMA14에 닿은 뒤 양봉으로 회복. 거래량 하한 없음.'],
  ['breakoutEntry','돌파 진입','셋업에서 직전 20봉 고가 위로 종가 돌파. 거래량 하한 없음.'],
  ['pyramid','추가 진입','보유 상태에서 EMA14 눌림 후 양봉 회복, 비교 거래량 1배 이상. 진입·추가 진입 후 3봉 간격, 최대 2회.'],
- ['tp1','TP1 도달','진입 봉 마감가격을 기준으로 저장한 초기 위험 거리의 2배. 다음 봉부터 고가로 도달 확인.'],
- ['tp2','TP2 도달','초기 위험 거리의 3배. 다음 봉부터 고가로 도달 확인.'],
+ ['tp1','TP1 도달','진입 봉 종가와 최근 5봉 저점으로 정한 0.75~1.5ATR 위험 거리의 1.5배. 다음 봉부터 고가로 도달 확인.'],
+ ['tp2','TP2 도달','신호 당시 초기 위험 거리의 2.5배. 목표는 이후 가격으로 다시 늘리지 않습니다.'],
  ['profit','부분 익절 고려','보유 중 직전 10봉 고가를 종가로 갱신하고 진입가 위. 3봉 간격, 보유 구간마다 횟수 초기화.'],
  ['exit14','분할청산 · EMA14','보유 중 종가가 EMA14 아래로 하향 교차. 회복 뒤 재이탈은 다시 평가.'],
  ['exit21','분할청산 · EMA21','보유 중 종가가 EMA21 아래로 하향 교차.'],
@@ -45,8 +46,9 @@ export function analyzeStrategy(rows){
   }
   if(!trade&&!exited&&setup&&g.atr>0&&valid(p)){
    const breakout=g.high20!=null&&p.close>g.high20,entry=prev?.ema21!=null&&prev.close<=prev.ema21&&p.close>g.ema21||recovering;
-   if(breakout||entry){const stop=Math.max(p.close*.01,Math.min(p.close-g.atr*1.5,...rows.slice(Math.max(0,i-9),i+1).filter(valid).map(v=>v.low))),risk=p.close-stop;
-    trade={entry:p.close,initialStop:stop,stop,risk,tp1:p.close+2*risk,tp2:p.close+3*risk,started:p.asOf,lastAdd:i,lastProfit:i,adds:0,profits:0,tp1Hit:false,tp2Hit:false};
+   const levels=riskLevels(p.close,g.atr,rows.slice(Math.max(0,i-4),i+1).map(v=>v.low));
+   if((breakout||entry)&&levels){const {stop,risk}=levels;
+    trade={...levels,initialStop:stop,stop,risk,started:p.asOf,lastAdd:i,lastProfit:i,adds:0,profits:0,tp1Hit:false,tp2Hit:false};
     emit(breakout?'breakoutEntry':'entry',`신호 종가 ${p.close} · 초기 손절 ${stop} · TP1 ${trade.tp1} / TP2 ${trade.tp2}. 실제 체결가 아님.`);
    }else if(!setupActive)emit('setup','단기 이평선 정배열과 EMA14 위 종가. 진입 조건은 미충족.');
   }
@@ -66,5 +68,5 @@ export function analyzeStrategy(rows){
   if(contraction&&!contractActive)emit('contraction','가격 폭·거래량 감소, EMA21 밀착 및 EMA55 상회');contractActive=contraction;
   frames.push({...g,start:p.start,provisional:!!p.provisional,observedAt:p.observedAt,signals,active:signals,trade:trade?{...trade}:null,peg:peg?{...peg}:null,heatCount});
  }
- return{...base,version:2,frames,events,rulesVersion:'independent-v2',asOf:rows.at(-1)?.asOf||null};
+ return{...base,version:3,frames,events,rulesVersion:'independent-v3',asOf:rows.at(-1)?.asOf||null};
 }

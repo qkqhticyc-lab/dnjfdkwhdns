@@ -37,6 +37,8 @@ jobs:
       - run: node scripts/collect-us-futures.mjs
       - run: npm run collect:credit
       - run: npm run collect:indicators
+      - run: node scripts/collect-indicator-history.mjs
+      - run: node scripts/collect-screener.mjs
       - run: npm run collect:sentiment
       - run: npm run collect:etfs
       - run: node scripts/refresh-club.mjs

@@ -1,3 +1,4 @@
+import{initScreener}from'./screener.js';
 import {initClub} from './club.js';
 import {initETFs} from './etfs.js';
 import {initAuth} from './auth.js';
@@ -25,5 +26,6 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  if(page==='reports')await initResearch();
  if(page==='credit')await initCredit();
  if(page==='charts')await initCharts(config);
+ if(page==='screener')await initScreener();
  if(page==='etfs')await initETFs();
 }).catch(()=>{const box=document.createElement('p');box.className='member-status is-error';box.textContent='서비스 연결을 확인하지 못했습니다. 잠시 후 새로고침해 주세요.';document.querySelector('main').prepend(box);});

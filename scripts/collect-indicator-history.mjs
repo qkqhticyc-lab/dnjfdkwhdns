@@ -1,0 +1,3 @@
+import{collectIndicatorHistory,retainHistory}from'../indicator-history.mjs';import{readFile,writeFile}from'node:fs/promises';
+let previous;for(const source of['local','published'])try{const d=source==='local'?JSON.parse(await readFile('data/indicator-history.json','utf8')):await fetch('https://qkqhticyc-lab.github.io/dnjfdkwhdns/data/indicator-history.json',{signal:AbortSignal.timeout(8000)}).then(r=>r.json());if(d.schemaVersion===1&&d.items?.length===12)previous=previous?retainHistory(d,previous):d;}catch{}
+const next=retainHistory(await collectIndicatorHistory(),previous);await writeFile('data/indicator-history.json',JSON.stringify(next));console.log(next.items.map(i=>[i.id,i.status,[...new Set(i.points?.map(p=>p.at.slice(0,8)))].length]));

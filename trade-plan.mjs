@@ -1,7 +1,8 @@
 // A fresh planning snapshot, not a simulated fill or the legacy signal trade.
 // Every input must belong to the displayed prefix. Parameters are our own rules.
 import {wilderRange} from './technical-core.mjs';
-export const PLAN_RULES = '선택 주기의 EMA8·21·55 배열과 EMA21의 5봉 기울기, ADX(14)·DI 방향, RSI(14)와 3봉 변화, 거래량을 함께 검토합니다. 강한 상승은 상승 배열·기울기·ADX≥25·+DI>−DI, RSI 50~70 미만, 최근 마감봉 거래량≥1배일 때입니다. 목표 범위는 강한 상승 1.5/3ATR, 상승 1.25/2ATR, 그 외 또는 RSI≥70·<45 또는 RSI 3봉간 5 이상 하락 시 0.75/1.5ATR입니다. 가까운 저항이 먼저 있으면 저항 직전(최대 0.1ATR, 남은 거리의 절반 이내)으로 제한하며 2차는 그 저항 돌파 후 재검토합니다. 저항이 없으면 변동성 시나리오로만 표시합니다. 최근 60봉의 좌우 2개 마감봉으로 확정한 지지 아래에 상승 국면 0.5ATR(최소 거리 1ATR), 그 외 0.35ATR(최소 0.75ATR) 여유를 둡니다. 지지가 없으면 EMA21 참고선입니다. 손절폭 한도 초과·1차 손익비<1.5·약세·RSI<45·RSI≥75·RSI≥70이며 하락·EMA21 위 2ATR 초과 등은 대기입니다. 진행 봉 거래량은 판단에서 제외하고 최근 마감봉을 사용합니다. 이 수치들은 자체 실험 규칙이며 가격 예측·도달 확률 또는 수익성이 검증된 값이 아닙니다.';
+import {riskLevels} from './risk-levels.mjs';
+export const PLAN_RULES = '최근 5개 마감봉 저점에서 0.2ATR 아래를 참고하되 손절 거리는 0.75~1.5ATR로 제한한 변동성 위험 예산입니다. 이 가격은 확정 지지선이나 손실 보장선이 아닙니다. TP1은 위험 거리의 1.5배, TP2는 2.5배입니다. 목표 앞에 저항이 있으면 목표를 저항으로 바꾸지 않고 저항·손익비를 따로 표시하고 진입 대기합니다. EMA 배열·기울기, ADX·DI, RSI 과열·약화, 최근 마감봉 거래량, 손절폭 한도로 진입 적합성을 평가합니다. 신호 카드의 목표는 신호 발생 당시 고정되며 현재가 계획과 다릅니다. 자체 실험 규칙으로 도달 확률·수익성은 검증되지 않았습니다.';
 const finite = Number.isFinite;
 export function planContext(frames){
  const p=frames.at(-1),old=frames.at(-6),rsiOld=frames.at(-4),range=wilderRange(frames);
@@ -13,8 +14,7 @@ export function planContext(frames){
  const volumeBar=frames.findLast(v=>!v.provisional),volumeRatio=finite(volumeBar?.volumeRatio)?volumeBar.volumeRatio:null;
  const strong=up&&range.adx>=25&&range.plusDI>range.minusDI&&rsi>=50&&rsi<70&&volumeRatio>=1;
  const defensive=!up||rsi>=70||rsi<45||(finite(rsiChange)&&rsiChange<=-5);
- const multipliers=defensive?[.75,1.5]:strong?[1.5,3]:[1.25,2];
- return{ready,regime:!ready?'unknown':strong?'strongUp':up?'up':down?'down':'range',label:!ready?'추세 자료 부족':strong?'강한 상승':up?'상승':down?'하락':'횡보·혼조',slope,rsi,rsiChange,...range,volumeRatio,volumeAsOf:volumeBar?.asOf,defensive,multipliers,buffer:up?.5:.35,minDistance:up?1:.75};
+ return{ready,regime:!ready?'unknown':strong?'strongUp':up?'up':down?'down':'range',label:!ready?'추세 자료 부족':strong?'강한 상승':up?'상승':down?'하락':'횡보·혼조',slope,rsi,rsiChange,...range,volumeRatio,volumeAsOf:volumeBar?.asOf,defensive};
 }
 export function buildTradePlan(frames, {maxRiskPct=8}={}) {
  const p=frames.at(-1),entry=p?.close,atr=p?.atr;
@@ -40,23 +40,21 @@ export function buildTradePlan(frames, {maxRiskPct=8}={}) {
  const support=supports[0]||(finite(p.ema21)&&p.ema21<entry?{value:p.ema21,asOf:p.asOf,kind:'EMA21 참고선'}:null);
  if(!support)return {...empty,reasons:['현재가 아래에서 사용할 지지 기준을 확인하지 못했습니다.']};
  const context=planContext(frames);
- const stop=Math.min(support.value-atr*context.buffer,entry-atr*context.minDistance);
+ const budget=riskLevels(entry,atr,closed.slice(-5).map(b=>b.low));
+ const stop=budget?.stop??0;
  if(stop<=0)return {...empty,reasons:['변동성이 가격에 비해 너무 커 유효한 손절 후보를 계산할 수 없습니다.']};
  const risk=entry-stop,riskPct=risk/entry*100,targets=[];
  for(const h of peaks.filter(h=>h.value>entry).sort((a,b)=>a.value-b.value))if(!targets.some(t=>Math.abs(t.value-h.value)<atr*.25))targets.push({...h,kind:'확인 고점 저항'});
  // Never skip a nearby resistance merely to manufacture a better reward/risk.
- const makeTarget=(multiple,resistance)=>{
-  const cap=entry+multiple*atr,obstacle=resistance?.value;
-  const before=finite(obstacle)?obstacle-Math.min(atr*.1,(obstacle-entry)*.5):Infinity;
-  return{value:Math.min(cap,before),kind:before<=cap?'저항 직전 · '+context.label:(!resistance?'저항 미확인 · ':'')+multiple+'ATR 시나리오',multiple,resistance:obstacle??null,scenario:!resistance};
- };
- const first=makeTarget(context.multipliers[0],targets[0]);
+ const first={value:budget.tp1,kind:'위험 거리 1.5R · 저항 통과 조건'};
  // A second target is conditional on clearing the first obstacle, not permission to skip it.
- let second=targets.length===1?null:makeTarget(context.multipliers[1],targets[1]);
+ let second={value:budget.tp2,kind:'위험 거리 2.5R · 1차 통과 조건'};
  if(second&&second.value<=first.value)second=null;
  const rr=(first.value-entry)/risk,extended=finite(p.ema21)&&entry-p.ema21>2*atr,reasons=[];
+ const obstacle=targets[0]||null,obstacleRr=obstacle?(obstacle.value-entry)/risk:null;
+ if(obstacle&&obstacle.value<first.value)reasons.push(`1차 목표 전 저항 ${obstacle.value.toLocaleString('ko-KR')}이 있어 돌파 확인이 필요합니다. 저항까지 손익비 ${obstacleRr.toFixed(2)}.`);
  if(riskPct>maxRiskPct)reasons.push(`손절폭 ${riskPct.toFixed(1)}%가 선택 한도 ${maxRiskPct}%를 넘습니다.`);
- if(rr<1.5)reasons.push(`1차 후보까지 손익비 ${rr.toFixed(2)}로 기준 1.5에 못 미칩니다.`);
+ if(rr<1.5-1e-9)reasons.push(`1차 후보까지 손익비 ${rr.toFixed(2)}로 기준 1.5에 못 미칩니다.`);
  if(extended)reasons.push('EMA21에서 2ATR 이상 벌어져 있습니다.');
  if(!targets.length)reasons.push('위쪽 저항이 확인되지 않아 목표는 변동성 시나리오입니다.');
  if(p.ema8<p.ema21)reasons.push('단기 추세가 EMA21 아래에 있습니다.');
@@ -70,5 +68,5 @@ export function buildTradePlan(frames, {maxRiskPct=8}={}) {
  const pullback={low:support.value-atr*.25,high:support.value+atr*.25,stop:support.value-atr*.75};
  if(pullback.high>=entry||pullback.stop<=0)Object.assign(pullback,{low:null,high:null,stop:null});
  const status=reasons.length?'wait':'review';
- return {status,label:status==='wait'?'신규 진입 대기':'진입 조건 검토',asOf:p.asOf,provisional:!!p.provisional,entry,atr,support,stop,riskPct,maxRiskPct,tp1:first.value,tp2:second?.value??null,first,second,rr,extended,pullback,context,stopNote:`지지 아래 ${context.buffer}ATR · 최소 ${context.minDistance}ATR 여유`,reasons:reasons.length?reasons:['종합 조건 충족 · 목표 도달을 보장하지 않으며 시장·업종 상황은 별도로 확인하세요.']};
+ return {status,label:status==='wait'?'신규 진입 대기':'진입 조건 검토',asOf:p.asOf,provisional:!!p.provisional,entry,atr,support,stop,riskPct,maxRiskPct,tp1:first.value,tp2:second?.value??null,first,second,rr,obstacle,obstacleRr,extended,pullback,context,stopNote:budget.stopKind+' · 지지선과 별개',reasons:reasons.length?reasons:['종합 조건 충족 · 목표 도달을 보장하지 않으며 시장·업종 상황은 별도로 확인하세요.']};
 }

@@ -2,8 +2,8 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import{analyzeStrategy}from'../strategy-core.mjs';import{liveDailyRows}from'../live-chart-core.mjs';import{aggregateFourHours}from'../reversal-core.mjs';
 const row=(i,c,extra={})=>({asOf:new Date(Date.UTC(2025,0,1+i)).toISOString().slice(0,10),open:c-.2,high:c+.4,low:c-.4,close:c,volume:100,...extra});
 const history=()=>Array.from({length:70},(_,i)=>row(i,100+i*.2));
-test('entry allows low volume; goals fixed at 2R/3R, no entry-bar target lookahead',()=>{
- const a=history();a.push(row(70,120,{volume:50,high:200}));const g=analyzeStrategy(a),t=g.frames.at(-1).trade;assert.ok(t);assert.equal(t.entry,120);assert.equal(t.tp1,120+2*t.risk);assert.equal(t.tp2,120+3*t.risk);assert.ok(g.frames.at(-1).signals.includes('breakoutEntry'));assert.ok(!g.frames.at(-1).signals.includes('tp1'));
+test('entry allows low volume; goals fixed at 1.5R/2.5R, no entry-bar target lookahead',()=>{
+ const a=history();a.push(row(70,120,{volume:50,high:200}));const g=analyzeStrategy(a),t=g.frames.at(-1).trade;assert.ok(t);assert.equal(t.entry,120);assert.equal(t.tp1,120+1.5*t.risk);assert.equal(t.tp2,120+2.5*t.risk);assert.ok(g.frames.at(-1).signals.includes('breakoutEntry'));assert.ok(!g.frames.at(-1).signals.includes('tp1'));
  a.push(row(71,t.tp2+1));const next=analyzeStrategy(a);assert.ok(next.frames.at(-1).signals.includes('tp1'));assert.ok(next.frames.at(-1).signals.includes('tp2'));assert.equal(next.frames.at(-1).trade.tp1,t.tp1);
 });
 test('future bars do not modify old signals; revised live bar can retract provisional entry',()=>{
