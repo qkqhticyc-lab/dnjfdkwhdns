@@ -1,8 +1,9 @@
 // Classify the trigger using only the entry candle and its preceding candle.
-export const ENTRY_KEYS=['triangleEntry','boxRetestEntry','breakoutEntry','entry'];
-export const ENTRY_LABELS={triangle:'삼각수렴 돌파',boxRetest:'박스권 재확인',breakout:'돌파 진입',pullback:'눌림 진입',reclaim:'이평선 회복',unknown:'유형 확인 중'};
+export const ENTRY_KEYS=['oversoldBounceEntry','triangleEntry','boxRetestEntry','breakoutEntry','entry'];
+export const ENTRY_LABELS={oversoldBounce:'과매도 반등',triangle:'삼각수렴 돌파',boxRetest:'박스권 재확인',breakout:'돌파 진입',pullback:'눌림 진입',reclaim:'이평선 회복',unknown:'유형 확인 중'};
 export function entryTrigger(frames,index,key){
  const p=frames[index],prev=frames[index-1];if(!p)return{type:'unknown',label:ENTRY_LABELS.unknown,reason:'신호 봉 자료가 부족합니다.'};
+ if(key==='oversoldBounceEntry')return{type:'oversoldBounce',label:ENTRY_LABELS.oversoldBounce,reason:'낙폭·RSI·이평선 이격으로 관찰한 뒤 저점 지지, RSI 회복, 전봉 고가 돌파와 거래량을 확인한 단기 역추세 실험 신호입니다.'};
  if(key==='triangleEntry')return{type:'triangle',label:ENTRY_LABELS.triangle,reason:'좌우 2봉 확인 고점·저점으로 만든 수렴 경계선을 종가와 거래량으로 돌파했습니다.'};
  if(key==='boxRetestEntry')return{type:'boxRetest',label:ENTRY_LABELS.boxRetest,reason:'앞선 봉에서 박스 상단을 돌파한 뒤 15봉 이내에 해당 가격을 재확인하고 양봉으로 회복했습니다.'};
  if(key==='breakoutEntry')return{type:'breakout',label:ENTRY_LABELS.breakout,reason:'직전 20봉 고가 '+p.high20+' 위로 종가 '+p.close+' 돌파. EMA8 > EMA14 > EMA21, 종가 > EMA14.'};
