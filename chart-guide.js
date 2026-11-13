@@ -5,6 +5,7 @@ import{buildTradePlan,PLAN_RULES}from'./trade-plan.mjs';
 import{entrySnapshot}from'./entry-snapshot.mjs';
 const GUIDE_RULES=STRATEGY_RULES.map(r=>['tp1','tp2'].includes(r.key)?{...r,label:r.key==='tp1'?'과거 신호 TP1 · 1.5R':'과거 신호 TP2 · 2.5R'}:r);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;},ns='http://www.w3.org/2000/svg',svg=(tag,attrs={},text)=>{const n=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,String(v));if(text!=null)n.textContent=text;return n;},num=(v,d=2)=>Number.isFinite(v)?v.toLocaleString('ko-KR',{maximumFractionDigits:d}):'—';
+const target=v=>Number.isFinite(v)?v>0&&v<1?'1 미만':num(v,0):'—';
 const viewStates=new Map();
 const prefs={frame:'daily',count:120,averages:true,signals:true,levels:true,maxRiskPct:8};
 const when=(at,frame)=>frame.timeframe==='1d'?at:new Date(at).toLocaleString('ko-KR',{timeZone:frame.timezone||'UTC',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
@@ -60,8 +61,8 @@ export function guideView(data,options={}){
     ['date',signal.kind==='breakoutEntry'?'돌파 진입 신호':'진입 신호',when(signal.asOf,frame),frame.timeframe==='4h'?'4시간봉 · 현지 시간':'일봉'],
     ['price','신호 기준 진입가',price(signal.entry)+' '+data.currency,signal.provisional?'진행 봉 가격 · 마감 전 변경 가능':'신호 발생 봉의 종가'],
     ['reference',view.follow?'비교 가격':'표시 마지막 봉 가격',price(signal.referencePrice)+' '+data.currency,when(signal.referenceAt,frame)],
-    ['tp1','신호 TP1',price(signal.tp1)+' '+data.currency,signal.tp1Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 1.5R'],
-    ['tp2','신호 TP2',price(signal.tp2)+' '+data.currency,signal.tp2Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 2.5R'],
+    ['tp1','신호 TP1',target(signal.tp1)+' '+data.currency,signal.tp1Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 1.5R'],
+    ['tp2','신호 TP2',target(signal.tp2)+' '+data.currency,signal.tp2Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 2.5R'],
     ['stop','신호 초기 손절',price(signal.initialStop)+' '+data.currency,'신호 당시 변동성 위험 예산'],
     ['change','진입가 대비 등락',(signal.changePct>0?'+':'')+num(signal.changePct,2)+'%','실제 매매 수익률 아님']
    ]){const cell=el('div');cell.dataset.entryValue=key;const valueNode=el('strong',value);if(key==='change')valueNode.className=signal.changePct>0?'guide-up':signal.changePct<0?'guide-down':'';cell.append(el('small',label),valueNode,el('small',note));cells.append(cell);}signalCard.append(cells);
@@ -92,7 +93,7 @@ export function guideView(data,options={}){
   function line(key,color,dash){let path='',open=false;for(const[p,i]of frames.map((p,i)=>[p,i])){if(!Number.isFinite(p[key])){open=false;continue;}path+=(open?'L':'M')+x(i).toFixed(2)+','+y(p[key]).toFixed(2)+' ';open=true;}if(path)pricePane.append(svg('path',{'data-guide-line':key,d:path,fill:'none',stroke:color,'stroke-width':key==='sma200'?2.5:1.5,...(dash?{'stroke-dasharray':dash}:{})}));}
   if(options.mode==='line')line('close','#70d7bd');
   if(prefs.averages)for(const l of GUIDE_LINES)line(l.key,l.color);
-  if(prefs.levels){line('high20','#73c9ac','5 4');line('low20','#96accc','5 4');}  if(prefs.levels&&signal?.status==='active'){for(const [key,label]of[['tp1','신호 TP1'],['tp2','신호 TP2']])if(Number.isFinite(signal[key]))pricePane.append(svg('line',{'data-signal-target':key,x1:x(Math.max(0,frames.length-20)),x2:right,y1:y(signal[key]),y2:y(signal[key]),stroke:'#c6a2ff','stroke-dasharray':'3 5'}),svg('text',{x:right-5,y:y(signal[key])-5,fill:'#c6a2ff','font-size':10,'text-anchor':'end'},label+' '+price(signal[key]))); const start=Math.max(0,frames.findIndex(p=>p.asOf>=signal.asOf));pricePane.append(svg('line',{'data-guide-entry-line':'',x1:x(start),x2:right,y1:y(signal.entry),y2:y(signal.entry),stroke:'#70d7bd','stroke-dasharray':'3 5'}),svg('text',{x:x(start)+4,y:y(signal.entry)+13,fill:'#70d7bd','font-size':10},'신호 진입가 '+price(signal.entry)));}
+  if(prefs.levels){line('high20','#73c9ac','5 4');line('low20','#96accc','5 4');}  if(prefs.levels&&signal?.status==='active'){for(const [key,label]of[['tp1','신호 TP1'],['tp2','신호 TP2']])if(Number.isFinite(signal[key]))pricePane.append(svg('line',{'data-signal-target':key,x1:x(Math.max(0,frames.length-20)),x2:right,y1:y(signal[key]),y2:y(signal[key]),stroke:'#c6a2ff','stroke-dasharray':'3 5'}),svg('text',{x:right-5,y:y(signal[key])-5,fill:'#c6a2ff','font-size':10,'text-anchor':'end'},label+' '+target(signal[key]))); const start=Math.max(0,frames.findIndex(p=>p.asOf>=signal.asOf));pricePane.append(svg('line',{'data-guide-entry-line':'',x1:x(start),x2:right,y1:y(signal.entry),y2:y(signal.entry),stroke:'#70d7bd','stroke-dasharray':'3 5'}),svg('text',{x:x(start)+4,y:y(signal.entry)+13,fill:'#70d7bd','font-size':10},'신호 진입가 '+price(signal.entry)));}
   const ticks=width<600?2:4;for(let i=0;i<=ticks;i++){const k=Math.round((frames.length-1)*i/ticks);plot.append(svg('text',{x:x(k),y:height-12,fill:'#b2c4cf','font-size':10,'text-anchor':i===0?'start':i===ticks?'end':'middle'},when(frames[k].asOf,frame)));}
   if(prefs.signals){const marked=frames.map((p,i)=>({p,i})).filter(v=>v.p.signals.length).slice(-12).reverse(),occupied=[];
    for(const {p,i} of marked){const rules=p.signals.map(k=>GUIDE_RULES.find(r=>r.key===k)),r=rules[0],event=guide.events.find(e=>e.asOf===p.asOf&&e.key===r.key),xx=x(i),anchor=y(p.high||p.close)-4,text=(p.provisional?'잠정 ':'')+r.label+(event?.count?' ×'+event.count:'')+(rules.length>1?' +'+(rules.length-1):''),width=Math.max(70,text.length*9),tx=Math.min(right-width/2,Math.max(left+width/2,xx)),group=svg('g',{'data-guide-signal':p.asOf});
