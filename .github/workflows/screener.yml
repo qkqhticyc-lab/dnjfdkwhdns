@@ -10,6 +10,7 @@ on:
       - 'technical-core.mjs'
       - 'risk-levels.mjs'
       - 'entry-snapshot.mjs'
+      - 'entry-types.mjs'
       - 'live-chart-core.mjs'
       - 'scripts/screener-*.mjs'
       - '.github/workflows/screener.yml'

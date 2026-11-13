@@ -1,3 +1,4 @@
+import{entryTrigger}from'./entry-types.mjs';
 import{formatPrice,formatTarget,formatPriceReason,displayPrice}from'./price-display.mjs';
 import{viewWindow,setWindow,zoomWindow,scalePrice}from'./chart-viewport.mjs';
 import{GUIDE_LINES}from'./chart-guide-core.mjs';
@@ -44,6 +45,7 @@ export function guideView(data,options={}){
   tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.guideFrame===prefs.frame)));content.replaceChildren();
   const frame=data.frameInfo||data.reversals?.[prefs.frame],guide=data.guide||frame?.guide;
   if(!guide?.frames?.length){content.append(el('p',frame?.reason||'이 주기의 보조지표 자료가 없습니다. 분석 다시 불러오기로 확인해 주세요.','guide-notice'));return;}
+  const eventLabel=(key,at)=>['entry','breakoutEntry'].includes(key)?entryTrigger(guide.frames,guide.frames.findIndex(p=>p.asOf===at),key).label:GUIDE_RULES.find(r=>r.key===key)?.label;
   let frames=guide.frames.slice(-Math.min(prefs.count,500));if(options.range){const end=new Date(guide.frames.at(-1).asOf),months=({'1mo':1,'3mo':3,'6mo':6,'1y':12,'2y':24})[options.range];end.setUTCMonth(end.getUTCMonth()-months);frames=guide.frames.filter(p=>Date.parse(p.asOf)>=end.getTime()).slice(-500);}
   if(!view.count)view.count=frames.length;
   const window=viewWindow(guide.frames,view);frames=guide.frames.slice(window.start,window.end);
@@ -53,13 +55,13 @@ export function guideView(data,options={}){
   content.append(el('p',frame.sessionNote||'진행 봉 포함 · 30초마다 조회','guide-note'));
   if(frame.sourceThrough)content.append(el('p',(frame.timeframe==='4h'?'분봉 기준 ':'가격·일봉 조회 기준 ')+new Date(frame.sourceThrough).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST · 제공처 지연 가능','guide-note'));
   const trade=frames.at(-1).trade,plan=buildTradePlan(guide.frames.slice(0,window.end),{maxRiskPct:prefs.maxRiskPct}),distance=v=>Number.isFinite(v)?((v/plan.entry-1)*100>=0?'+':'')+num((v/plan.entry-1)*100,2)+'%':'—';
-  const signal=entrySnapshot(guide,frames.at(-1).asOf),signalCard=el('div',null,'guide-entry');signalCard.dataset.entryStatus=signal?.status||'none';
+  const signal=entrySnapshot(guide,frames.at(-1).asOf),signalCard=el('div',null,'guide-entry');signalCard.dataset.entryStatus=signal?.status||'none';signalCard.dataset.entryType=signal?.entryType||'none';
   signalCard.append(el('h3',view.follow?'최근 진입 신호':'이 시점까지의 최근 진입 신호'));
   if(signal){
    const state=signal.status==='closed'?(signal.exitProvisional?'종료 신호 잠정':'종료된 신호'):signal.status==='active'?(signal.provisional?'잠정 진입 · 진행 봉':'진입 후 추적 중'):'추적 상태 미확인';
    signalCard.append(el('span',state,'guide-entry-state'));const cells=el('div',null,'guide-entry-grid');
    for(const[key,label,value,note]of[
-    ['date',signal.kind==='breakoutEntry'?'돌파 진입 신호':'진입 신호',when(signal.asOf,frame),frame.timeframe==='4h'?'4시간봉 · 현지 시간':'일봉'],
+    ['date',signal.entryLabel+' 신호',when(signal.asOf,frame),frame.timeframe==='4h'?'4시간봉 · 현지 시간':'일봉'],
     ['price','신호 기준 진입가',price(signal.entry)+' '+data.currency,signal.provisional?'진행 봉 가격 · 마감 전 변경 가능':'신호 발생 봉의 종가'],
     ['reference',view.follow?'비교 가격':'표시 마지막 봉 가격',price(signal.referencePrice)+' '+data.currency,when(signal.referenceAt,frame)],
     ['tp1','신호 TP1',target(signal.tp1)+' '+data.currency,signal.tp1Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 1.5R'],
@@ -71,7 +73,7 @@ export function guideView(data,options={}){
   }else signalCard.append(el('p','이 시점까지 수신된 이력에는 진입 신호가 없습니다.','guide-note'));content.append(signalCard);
   const explanation=el('div',null,'guide-explanation'),recent=guide.events.filter(e=>e.asOf<=last.asOf&&['entry','breakoutEntry','exit'].includes(e.key)).at(-1);
   explanation.append(el('h3',recent?.key==='exit'?'이탈 이유':signal?.status==='active'?'진입 신호 이유':'진입 대기 이유'));
-  explanation.append(el('p',recent&&(recent.key==='exit'||signal?.status==='active')?reason(recent.reason):reason(plan.reasons.join(' ')),'guide-note'));content.append(explanation);
+  explanation.append(el('p',recent&&(recent.key==='exit'||signal?.status==='active')?reason((recent.key==='exit'?'':signal?.entryReason||'')+' '+recent.reason):reason(plan.reasons.join(' ')),'guide-note'));content.append(explanation);
   if(data.reversal?.label)content.append(el('p',data.reversal.label+' · 20·60봉선 기준'+(last.provisional?' · 진행 봉 포함 잠정 판정':''),'guide-note'));
   if(data.metrics)content.append(el('p','추세 강도 ADX(14) '+num(data.metrics.adx,1)+' · +DI '+num(data.metrics.plusDI,1)+' / −DI '+num(data.metrics.minusDI,1)+' · ADX 25 이상은 강한 추세, 방향은 위 추세 판정과 별도로 확인하세요.','guide-note'));
   if(guide.missingLines.length)content.append(el('p',guide.missingLines.join(' · ')+' 자료 부족 — '+guide.observations+'개 봉만 수신했습니다.','guide-notice'));
@@ -97,13 +99,13 @@ export function guideView(data,options={}){
   if(prefs.levels){line('high20','#73c9ac','5 4');line('low20','#96accc','5 4');}  if(prefs.levels&&signal?.status==='active'){for(const [key,label]of[['tp1','신호 TP1'],['tp2','신호 TP2']])if(Number.isFinite(signal[key]))pricePane.append(svg('line',{'data-signal-target':key,x1:x(Math.max(0,frames.length-20)),x2:right,y1:y(displayPrice(signal[key],data.currency)),y2:y(displayPrice(signal[key],data.currency)),stroke:'#c6a2ff','stroke-dasharray':'3 5'}),svg('text',{x:right-5,y:y(displayPrice(signal[key],data.currency))-5,fill:'#c6a2ff','font-size':10,'text-anchor':'end'},label+' '+target(signal[key]))); const start=Math.max(0,frames.findIndex(p=>p.asOf>=signal.asOf));pricePane.append(svg('line',{'data-guide-entry-line':'',x1:x(start),x2:right,y1:y(signal.entry),y2:y(signal.entry),stroke:'#70d7bd','stroke-dasharray':'3 5'}),svg('text',{x:x(start)+4,y:y(signal.entry)+13,fill:'#70d7bd','font-size':10},'신호 진입가 '+price(signal.entry)));}
   const ticks=width<600?2:4;for(let i=0;i<=ticks;i++){const k=Math.round((frames.length-1)*i/ticks);plot.append(svg('text',{x:x(k),y:height-12,fill:'#b2c4cf','font-size':10,'text-anchor':i===0?'start':i===ticks?'end':'middle'},when(frames[k].asOf,frame)));}
   if(prefs.signals){const marked=frames.map((p,i)=>({p,i})).filter(v=>v.p.signals.length).slice(-12).reverse(),occupied=[];
-   for(const {p,i} of marked){const rules=p.signals.map(k=>GUIDE_RULES.find(r=>r.key===k)),r=rules[0],event=guide.events.find(e=>e.asOf===p.asOf&&e.key===r.key),xx=x(i),anchor=y(p.high||p.close)-4,text=(p.provisional?'잠정 ':'')+r.label+(event?.count?' ×'+event.count:'')+(rules.length>1?' +'+(rules.length-1):''),width=Math.max(70,text.length*9),tx=Math.min(right-width/2,Math.max(left+width/2,xx)),group=svg('g',{'data-guide-signal':p.asOf});
-    group.append(svg('circle',{cx:xx,cy:anchor,r:3,fill:r.color}),svg('title',{},when(p.asOf,frame)+' · '+guide.events.filter(e=>e.asOf===p.asOf).map(e=>(e.provisional?'[잠정] ':'')+GUIDE_RULES.find(r=>r.key===e.key).label+': '+reason(e.reason)).join(' / ')));
+   for(const {p,i} of marked){const rules=p.signals.map(k=>GUIDE_RULES.find(r=>r.key===k)),r=rules[0],event=guide.events.find(e=>e.asOf===p.asOf&&e.key===r.key),xx=x(i),anchor=y(p.high||p.close)-4,text=(p.provisional?'잠정 ':'')+eventLabel(r.key,p.asOf)+(event?.count?' ×'+event.count:'')+(rules.length>1?' +'+(rules.length-1):''),width=Math.max(70,text.length*9),tx=Math.min(right-width/2,Math.max(left+width/2,xx)),group=svg('g',{'data-guide-signal':p.asOf});
+    group.append(svg('circle',{cx:xx,cy:anchor,r:3,fill:r.color}),svg('title',{},when(p.asOf,frame)+' · '+guide.events.filter(e=>e.asOf===p.asOf).map(e=>(e.provisional?'[잠정] ':'')+eventLabel(e.key,e.asOf)+': '+reason(e.reason)).join(' / ')));
     for(const offset of[-12,-30,-48,-66,22,40,58,76]){const yy=anchor+offset,box={left:tx-width/2,right:tx+width/2,top:yy-11,bottom:yy+3};if(yy<16||yy>bottom-5||occupied.some(b=>box.left<b.right+5&&box.right>b.left-5&&box.top<b.bottom+3&&box.bottom>b.top-3))continue;occupied.push(box);group.append(svg('line',{x1:xx,x2:tx,y1:anchor,y2:yy,stroke:r.color,opacity:.35}),svg('text',{x:tx,y:yy,fill:r.color,'font-size':10,'text-anchor':'middle','paint-order':'stroke',stroke:'#101a22','stroke-width':3},text));break;}pricePane.append(group);
    }
   }
   const cursor=svg('line',{x1:x(frames.length-1),x2:x(frames.length-1),y1:top,y2:volBottom,stroke:'#b2c4cf','stroke-dasharray':'2 4'});plot.append(cursor);const inspect=el('p',null,'guide-inspect'),legend=el('div',null,'guide-legend');const signalInfo=el('p',null,'guide-inspect-signals');content.append(inspect,legend,signalInfo);let selected=frames.length-1;
-  function choose(i){selected=Math.max(0,Math.min(frames.length-1,i));const p=frames[selected];cursor.setAttribute('x1',x(selected));cursor.setAttribute('x2',x(selected));inspect.textContent=when(p.asOf,frame)+' · 시 '+price(p.open)+' / 고 '+price(p.high)+' / 저 '+price(p.low)+' / 종 '+price(p.close)+' · 거래량 '+num(p.volume,0)+' · RSI '+num(p.rsi,1)+' · '+trendLabel[p.trend];signalInfo.textContent=guide.events.filter(e=>e.asOf===p.asOf).map(e=>(e.provisional?'[잠정] ':'[마감] ')+GUIDE_RULES.find(r=>r.key===e.key).label+' — '+reason(e.reason)).join(' / ');legend.replaceChildren();for(const l of GUIDE_LINES){const span=el('span',l.label+' '+(p[l.key]==null?'자료 부족':price(p[l.key])));span.style.setProperty('--guide-line',l.color);legend.append(span);}}
+  function choose(i){selected=Math.max(0,Math.min(frames.length-1,i));const p=frames[selected];cursor.setAttribute('x1',x(selected));cursor.setAttribute('x2',x(selected));inspect.textContent=when(p.asOf,frame)+' · 시 '+price(p.open)+' / 고 '+price(p.high)+' / 저 '+price(p.low)+' / 종 '+price(p.close)+' · 거래량 '+num(p.volume,0)+' · RSI '+num(p.rsi,1)+' · '+trendLabel[p.trend];signalInfo.textContent=guide.events.filter(e=>e.asOf===p.asOf).map(e=>(e.provisional?'[잠정] ':'[마감] ')+eventLabel(e.key,e.asOf)+' — '+reason(e.reason)).join(' / ');legend.replaceChildren();for(const l of GUIDE_LINES){const span=el('span',l.label+' '+(p[l.key]==null?'자료 부족':price(p[l.key])));span.style.setProperty('--guide-line',l.color);legend.append(span);}}
   const axis=svg('rect',{'data-price-axis':'',x:right,y:top,width:width-right,height:bottom-top,fill:'transparent',role:'slider',tabindex:0,'aria-label':'가격 범위 조절. 위아래 드래그 또는 위아래 방향키, Home으로 자동 범위.','aria-valuemin':0,'aria-valuemax':100,'aria-valuenow':50});axis.style.cursor='ns-resize';plot.append(axis);
   const coords=e=>{const rect=plot.getBoundingClientRect();return{x:(e.clientX-rect.left)/rect.width*width,y:(e.clientY-rect.top)/rect.height*height,rect};};
   current={rows:guide.frames,width,height,priceHeight:bottom-top,rect:plot.getBoundingClientRect(),step,window,price:{min,max}};

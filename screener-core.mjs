@@ -1,3 +1,4 @@
+import{screenEntryType}from'./entry-types.mjs';
 import{analyzeStrategy}from'./strategy-core.mjs';
 import{liveDailyRows}from'./live-chart-core.mjs';
 import{entrySnapshot}from'./entry-snapshot.mjs';
@@ -12,8 +13,8 @@ export function screenRow(item,bars,now=new Date()){
  if(rows.length<60)throw Error('Insufficient closed history');const guide=analyzeStrategy(rows),last=guide.frames.at(-1),signal=entrySnapshot(guide,last.asOf),index=signal?guide.frames.findIndex(p=>p.asOf===signal.asOf):-1;
  return{...item,liquidity:liquidityStats(rows),status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
 }
-export function filterScreen(items,{market='ALL',query='',age=3,state='active',trend='ALL',volume=0,liquidity='all',excludeSpecial=false,excluded=[]}={}){
- return items.filter(p=>p.status==='ok'&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||p.signal&&p.signal.age<(Number(age)===0?1:Number(age)))&&(state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume));
+export function filterScreen(items,{market='ALL',query='',age=3,state='active',trend='ALL',volume=0,liquidity='all',excludeSpecial=false,excluded=[],entryType='all'}={}){
+ return items.filter(p=>p.status==='ok'&&(entryType==='all'||entryType==='confirmed'&&['breakout','pullback'].includes(screenEntryType(p.signal))||screenEntryType(p.signal)===entryType)&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||p.signal&&p.signal.age<(Number(age)===0?1:Number(age)))&&(state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume));
 }
 export const screenKey=p=>p.market+':'+p.symbol;
 export function shardFor(p,count){let h=0;for(const c of screenKey(p))h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h%count;}
