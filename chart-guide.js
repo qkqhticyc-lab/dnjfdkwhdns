@@ -12,7 +12,7 @@ const prefs={frame:'daily',count:120,averages:true,signals:true,patterns:true,le
 const when=(at,frame)=>frame.timeframe==='1d'?at:new Date(at).toLocaleString('ko-KR',{timeZone:frame.timezone||'UTC',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const trendLabel={up:'상승 정렬',down:'하락 정렬',mixed:'혼조',insufficient:'이동평균 준비 중'};
 export function guideView(data,options={}){
- const price=v=>formatPrice(v,data.currency),target=v=>formatTarget(v,data.currency),reason=s=>formatPriceReason(s,data.currency);
+ const price=v=>formatPrice(v,data.currency),target=v=>formatTarget(v,data.currency),reason=s=>formatPriceReason(String(s||'').replaceAll('20봉 고가 대비 낙폭','관찰 시작 시 20봉 고가 대비 낙폭'),data.currency);
  if(options.frame)prefs.frame=options.frame;
  if(options.count)prefs.count=options.count;
  const section=el('section',null,'panel chart-guide');section.setAttribute('aria-label','공개 규칙 보조지표');
@@ -54,7 +54,7 @@ export function guideView(data,options={}){
   if(frame.status==='stale'||data.status==='stale')content.append(el('p','새 자료 연결 지연 · 이전 분석과 원래 기준 시각을 유지합니다.','guide-notice'));
   content.append(el('p',frame.sessionNote||'진행 봉 포함 · 30초마다 조회','guide-note'));
   if(frame.sourceThrough)content.append(el('p',(frame.timeframe==='4h'?'분봉 기준 ':'가격·일봉 조회 기준 ')+new Date(frame.sourceThrough).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST · 제공처 지연 가능','guide-note'));
-  const bounce=frames.at(-1).bounce;if(bounce?.state==='watch'){const note=el('div',null,'guide-bounce guide-notice');note.dataset.bounceState='watch';note.append(el('strong','낙폭 과대 관찰 · 반등 확인 대기'),el('p','20봉 고가 대비 낙폭 '+num(bounce.dropPct,1)+'% · 관찰 구간 최저 RSI '+num(bounce.minRsi,1)),el('p',bounce.blocked.slice(0,3).join(' · ')),el('p','진입 신호가 아닙니다. 저점 갱신 중에는 기다리며, 관찰은 최초 조건 충족 후 10봉까지입니다.'));content.append(note);}
+  const bounce=frames.at(-1).bounce;if(bounce?.state==='watch'){const note=el('div',null,'guide-bounce guide-notice');note.dataset.bounceState='watch';note.append(el('strong','낙폭 과대 관찰 · 반등 확인 대기'),el('p','관찰 시작 시 낙폭 '+num(bounce.dropPct,1)+'% · 관찰 구간 최저 RSI '+num(bounce.minRsi,1)),el('p',bounce.blocked.slice(0,3).join(' · ')),el('p','진입 신호가 아닙니다. 저점 갱신 중에는 기다리며, 관찰은 최초 조건 충족 후 10봉까지입니다.'));content.append(note);}
   const trade=frames.at(-1).trade,plan=buildTradePlan(guide.frames.slice(0,window.end),{maxRiskPct:prefs.maxRiskPct}),distance=v=>Number.isFinite(v)?((v/plan.entry-1)*100>=0?'+':'')+num((v/plan.entry-1)*100,2)+'%':'—';
   const signal=entrySnapshot(guide,frames.at(-1).asOf),signalCard=el('div',null,'guide-entry');signalCard.dataset.entryStatus=signal?.status||'none';signalCard.dataset.entryType=signal?.entryType||'none';
   signalCard.append(el('h3',view.follow?'최근 진입 신호':'이 시점까지의 최근 진입 신호'));
