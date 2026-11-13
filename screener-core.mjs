@@ -14,7 +14,7 @@ export function screenRow(item,bars,now=new Date()){
  return{...item,liquidity:liquidityStats(rows),status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
 }
 export function filterScreen(items,{market='ALL',query='',age=3,state='active',trend='ALL',volume=0,liquidity='all',excludeSpecial=false,excluded=[],entryType='all'}={}){
- return items.filter(p=>p.status==='ok'&&(entryType==='all'||entryType==='confirmed'&&['breakout','pullback'].includes(screenEntryType(p.signal))||screenEntryType(p.signal)===entryType)&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||p.signal&&p.signal.age<(Number(age)===0?1:Number(age)))&&(state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume));
+ return items.filter(p=>p.status==='ok'&&(entryType==='all'||entryType==='confirmed'&&['breakout','pullback','triangle','boxRetest'].includes(screenEntryType(p.signal))||screenEntryType(p.signal)===entryType)&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||p.signal&&p.signal.age<(Number(age)===0?1:Number(age)))&&(state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume));
 }
 export const screenKey=p=>p.market+':'+p.symbol;
 export function shardFor(p,count){let h=0;for(const c of screenKey(p))h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h%count;}
@@ -63,11 +63,11 @@ export async function collectScreener(fetcher=fetch,now=new Date(),previous,opti
   }catch(e){const prior=old.get(screenKey(s));results[i]=prior?{...prior,...s,status:'stale',error:String(e.message).slice(0,120)}:{...s,status:'unavailable',error:String(e.message).slice(0,120)};}
   done++;if(done%100===0)options.onProgress?.({shard,done,total:items.length});
  }}));
- return{schemaVersion:1,rulesVersion:'independent-v3',universeScope:universe.universeScope,universeCollectedAt:universe.collectedAt,collectedAt:now.toISOString(),timeframe:'daily',coverage:universe.coverage,shard,shards,items:results};
+ return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,universeScope:universe.universeScope,universeCollectedAt:universe.collectedAt,collectedAt:now.toISOString(),timeframe:'daily',coverage:universe.coverage,shard,shards,items:results};
 }
 export function mergeScreenShards(universe,parts,count){
  if(parts.length!==count||new Set(parts.map(p=>p.shard)).size!==count)throw Error('Incomplete shards');const merged=new Map();
- for(const part of parts){if(part.rulesVersion!=='independent-v3'||part.universeCollectedAt!==universe.collectedAt||part.shards!==count||part.shard<0||part.shard>=count)throw Error('Mismatched scan');for(const p of part.items){const key=screenKey(p);if(merged.has(key)||shardFor(p,count)!==part.shard)throw Error('Duplicate or wrong-shard stock');merged.set(key,p);}}
+ for(const part of parts){if(part.rulesVersion!=='independent-v3'||part.patternRulesVersion!==1||part.universeCollectedAt!==universe.collectedAt||part.shards!==count||part.shard<0||part.shard>=count)throw Error('Mismatched scan');for(const p of part.items){const key=screenKey(p);if(merged.has(key)||shardFor(p,count)!==part.shard)throw Error('Duplicate or wrong-shard stock');merged.set(key,p);}}
  if(merged.size!==universe.items.length||universe.items.some(p=>!merged.has(screenKey(p))))throw Error('Incomplete universe');
- return{schemaVersion:1,rulesVersion:'independent-v3',universeScope:universe.universeScope,collectedAt:universe.collectedAt,completedAt:new Date().toISOString(),timeframe:'daily',coverage:universe.coverage,items:universe.items.map(p=>merged.get(screenKey(p)))};
+ return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,universeScope:universe.universeScope,collectedAt:universe.collectedAt,completedAt:new Date().toISOString(),timeframe:'daily',coverage:universe.coverage,items:universe.items.map(p=>merged.get(screenKey(p)))};
 }

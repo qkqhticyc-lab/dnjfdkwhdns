@@ -1,3 +1,4 @@
+import{analyzePatterns,PATTERN_RULES}from'./pattern-core.mjs';
 import {analyzeGuide} from './chart-guide-core.mjs';
 import {riskLevels} from './risk-levels.mjs';
 // Independent, published rules. No claim to reproduce Lazy Alpha's private formula.
@@ -5,6 +6,9 @@ export const STRATEGY_RULES=[
  ['setup','셋업','EMA8 > EMA14 > EMA21, 종가 > EMA14.'],
  ['entry','진입','셋업에서 EMA21 상향 교차 또는 EMA14에 닿은 뒤 양봉으로 회복. 거래량 하한 없음.'],
  ['breakoutEntry','돌파 진입','셋업에서 직전 20봉 고가 위로 종가 돌파. 거래량 하한 없음.'],
+ ['triangleEntry','삼각수렴 돌파',PATTERN_RULES.triangle],
+ ['boxRetestEntry','박스권 재확인',PATTERN_RULES.boxRetest],
+ ['patternExit','패턴 진입 이탈','해당 패턴 진입의 추적 손절선 종가 이탈 또는 2봉 연속 EMA21 아래·EMA8<EMA14.'],
  ['pyramid','추가 진입','보유 상태에서 EMA14 눌림 후 양봉 회복, 비교 거래량 1배 이상. 진입·추가 진입 후 3봉 간격, 최대 2회.'],
  ['tp1','TP1 도달','진입 봉 종가와 최근 5봉 저점으로 정한 0.75~1.5ATR 위험 거리의 1.5배. 다음 봉부터 고가로 도달 확인.'],
  ['tp2','TP2 도달','신호 당시 초기 위험 거리의 2.5배. 목표는 이후 가격으로 다시 늘리지 않습니다.'],
@@ -20,10 +24,10 @@ export const STRATEGY_RULES=[
  ['pegExpired','PEG 만료','발생 후 20봉 경과. 새 PEG 발생은 이전 기준을 대체.'],
  ['heat','과열 주의','RSI14 ≥ 70, EMA21 위로 2ATR 이상. 해당 연속 구간의 충족 봉 수 표시.'],
  ['contraction','변동성 수축','최근 10봉 고저폭/평균종가가 이전 10봉보다 20% 이상 축소, 거래량 감소, EMA21과 거리 ≤ 0.5ATR, 종가 > EMA55. 원본 VCP와 별도 규칙.']
-].map(([key,label,rule])=>({key,label,rule,color:['exit','exit14','exit21','pegInvalid'].includes(key)?'#f4a0aa':['entry','breakoutEntry','peg','pegBreakout'].includes(key)?'#72d8b1':['heat','profit','tp1','tp2'].includes(key)?'#f3c978':'#a5baff'}));
+].map(([key,label,rule])=>({key,label,rule,color:['exit','patternExit','exit14','exit21','pegInvalid'].includes(key)?'#f4a0aa':['entry','breakoutEntry','peg','pegBreakout'].includes(key)?'#72d8b1':['heat','profit','tp1','tp2'].includes(key)?'#f3c978':'#a5baff'}));
 const valid=p=>p&&[p.open,p.high,p.low,p.close].every(Number.isFinite),mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
 export function analyzeStrategy(rows){
- const base=analyzeGuide(rows),events=[],frames=[];let trade=null,peg=null,setupActive=false,heatCount=0,contractActive=false;
+ const base=analyzeGuide(rows),patterns=analyzePatterns(rows,base.frames),events=[],frames=[],patternTrades={triangle:null,boxRetest:null};let trade=null,peg=null,setupActive=false,heatCount=0,contractActive=false;
  for(let i=0;i<rows.length;i++){
   const p=rows[i],g=base.frames[i],prev=base.frames[i-1],prior=rows.slice(Math.max(0,i-10),i),signals=[];
   const emit=(key,reason,extra={})=>{signals.push(key);events.push({key,asOf:p.asOf,close:p.close,provisional:!!p.provisional,reason,...extra});};
@@ -66,7 +70,11 @@ export function analyzeStrategy(rows){
   const a=rows.slice(i-19,i-9),b=rows.slice(i-9,i+1),width=w=>(Math.max(...w.map(v=>v.high))-Math.min(...w.map(v=>v.low)))/mean(w.map(v=>v.close));
   const contraction=i>=19&&[...a,...b].every(v=>valid(v)&&Number.isFinite(v.volume))&&width(b)<=width(a)*.8&&mean(b.map(v=>v.volume))<mean(a.map(v=>v.volume))&&g.atr>0&&Math.abs(p.close-g.ema21)<=g.atr*.5&&p.close>g.ema55;
   if(contraction&&!contractActive)emit('contraction','가격 폭·거래량 감소, EMA21 밀착 및 EMA55 상회');contractActive=contraction;
-  frames.push({...g,start:p.start,provisional:!!p.provisional,observedAt:p.observedAt,signals,active:signals,trade:trade?{...trade}:null,peg:peg?{...peg}:null,heatCount});
+  const pattern=patterns.frames[i];for(const[type,key,trigger]of[['boxRetest','boxRetestEntry',pattern.boxSignal],['triangle','triangleEntry',pattern.triangleSignal]]){let t=patternTrades[type],closed=false;
+   if(t){for(const[target,level]of[['tp1',t.tp1],['tp2',t.tp2]])if(!t[target+'Hit']&&p.high>=level){t[target+'Hit']=true;emit(target,'고가 '+p.high+' ≥ 저장 목표 '+level,{entryAt:t.started,patternType:type,level});}if(p.close<t.stop||(prev?.close<prev?.ema21&&p.close<g.ema21&&g.ema8<g.ema14)){emit('patternExit','종가 '+p.close+' · 해당 패턴 추적 손절선 '+t.stop,{entryAt:t.started,patternType:type});t=null;closed=true;}else if(g.ema21>t.stop&&g.ema21<p.close)t.stop=g.ema21;}
+   if(trigger&&!t&&!closed&&valid(p)){const levels=riskLevels(p.close,g.atr,rows.slice(Math.max(0,i-4),i+1).map(p=>p.low));if(levels){t={...levels,initialStop:levels.stop,started:p.asOf,tp1Hit:false,tp2Hit:false};const detail=type==='triangle'?'삼각수렴 상단선 '+(pattern.triangle.upper.m*i+pattern.triangle.upper.b)+' 종가 돌파':'박스 상단 '+pattern.box.top+' 재접촉 후 양봉 회복';emit(key,detail+' · 거래량 '+g.volumeRatio.toFixed(2)+'배 · 신호 종가 '+p.close+' · 초기 손절 '+t.stop+' · TP1 '+t.tp1+' / TP2 '+t.tp2,{patternType:type,levels:{...t}});}}patternTrades[type]=t;
+  }
+  frames.push({...g,start:p.start,provisional:!!p.provisional,observedAt:p.observedAt,signals,active:signals,trade:trade?{...trade}:null,peg:peg?{...peg}:null,heatCount,pattern,patternTrades:Object.fromEntries(Object.entries(patternTrades).map(([k,v])=>[k,v?{...v}:null]))});
  }
- return{...base,version:3,frames,events,rulesVersion:'independent-v3',asOf:rows.at(-1)?.asOf||null};
+ return{...base,version:3,patternRulesVersion:1,frames,events,rulesVersion:'independent-v3',asOf:rows.at(-1)?.asOf||null};
 }

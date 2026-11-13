@@ -6,6 +6,7 @@ on:
     paths:
       - 'screener-core.mjs'
       - 'strategy-core.mjs'
+      - 'pattern-core.mjs'
       - 'chart-guide-core.mjs'
       - 'technical-core.mjs'
       - 'risk-levels.mjs'
