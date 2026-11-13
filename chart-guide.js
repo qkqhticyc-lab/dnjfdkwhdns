@@ -5,7 +5,7 @@ import{GUIDE_LINES}from'./chart-guide-core.mjs';
 import{STRATEGY_RULES}from'./strategy-core.mjs';
 import{buildTradePlan,PLAN_RULES}from'./trade-plan.mjs';
 import{entrySnapshot}from'./entry-snapshot.mjs';
-const GUIDE_RULES=STRATEGY_RULES.map(r=>['tp1','tp2'].includes(r.key)?{...r,label:r.key==='tp1'?'과거 신호 TP1 · 1.5R':'과거 신호 TP2 · 2.5R'}:r);
+const GUIDE_RULES=STRATEGY_RULES.map(r=>['tp1','tp2'].includes(r.key)?{...r,label:r.key==='tp1'?'과거 신호 TP1 · 1.5R':'과거 신호 TP2 · 2.5R',rule:r.key==='tp1'?'TP1은 신호 당시 초기 위험의 1.5배로 고정합니다. 추세·수렴 진입은 최근 5봉 저점을 참고한 0.75~1.5ATR 위험, 과매도 반등은 해당 구간 저점−0.2ATR의 0.75~2ATR·8% 이내 위험을 씁니다. 진입 다음 봉부터 고가 도달을 확인합니다.':r.rule}:r);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;},ns='http://www.w3.org/2000/svg',svg=(tag,attrs={},text)=>{const n=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,String(v));if(text!=null)n.textContent=text;return n;},num=(v,d=2)=>Number.isFinite(v)?v.toLocaleString('ko-KR',{maximumFractionDigits:d}):'—';
 const viewStates=new Map();
 const prefs={frame:'daily',count:120,averages:true,signals:true,patterns:true,levels:true,maxRiskPct:8};
@@ -68,7 +68,7 @@ export function guideView(data,options={}){
     ['reference',view.follow?'비교 가격':'표시 마지막 봉 가격',price(signal.referencePrice)+' '+data.currency,when(signal.referenceAt,frame)],
     ['tp1','신호 TP1',target(signal.tp1)+' '+data.currency,signal.tp1Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 1.5R'],
     ['tp2','신호 TP2',target(signal.tp2)+' '+data.currency,signal.tp2Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 2.5R'],
-    ['stop','신호 초기 손절',price(signal.initialStop)+' '+data.currency,'신호 당시 변동성 위험 예산'],
+    ['stop','신호 초기 손절',price(signal.initialStop)+' '+data.currency,signal.entryType==='oversoldBounce'?'과매도 구간 저점−0.2ATR':'신호 당시 변동성 위험 예산'],
     ['change','진입가 대비 등락',(signal.changePct>0?'+':'')+num(signal.changePct,2)+'%','실제 매매 수익률 아님']
    ]){const cell=el('div');cell.dataset.entryValue=key;const valueNode=el('strong',value);if(key==='change')valueNode.className=signal.changePct>0?'guide-up':signal.changePct<0?'guide-down':'';cell.append(el('small',label),valueNode,el('small',note));cells.append(cell);}signalCard.append(cells);
    signalCard.append(el('p',(signal.exitAt?'종료 신호: '+when(signal.exitAt,frame)+' · 이후 가격과도 비교하므로 보유 수익률을 뜻하지 않습니다. ':'')+'신호 진입가는 당시 봉 가격이며 실제 매수가가 아닙니다. 신호 조건과 현재 상태를 아래에서 확인하세요.','guide-note'));
