@@ -1,3 +1,4 @@
+import{collectPremarket}from'./premarket-core.mjs';
 import {collectStockChart,chartSymbols} from './quotes-core.mjs';
 import {collectLiveChart} from './live-chart-core.mjs';
 const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'GET,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
@@ -13,7 +14,7 @@ Deno.serve(async req=>{
  const key=JSON.stringify([market,symbol,range,exchange,currency,live,frame]);
  try{
   let value=cache.get(key);if(!value||value.expires<Date.now()){
-   if(!pending.has(key))pending.set(key,(live?collectLiveChart({market,symbol,range,exchange,currency,frame}):collectStockChart({market,symbol,range,exchange,currency,includeQuote:true})).then(next=>{const old=cache.get(key)?.value?.quote;if(old&&['ok','stale'].includes(old.status)&&(next.quote?.status!=='ok'||Date.parse(next.quote.asOf)<Date.parse(old.asOf)))next.quote={...old,status:'stale'};if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{value:next,expires:Date.now()+20000});return next;}).finally(()=>pending.delete(key)));
+   if(!pending.has(key))pending.set(key,(live?Promise.all([collectLiveChart({market,symbol,range,exchange,currency,frame}),collectPremarket({market,symbol})]).then(([chart,premarket])=>({...chart,premarket})):collectStockChart({market,symbol,range,exchange,currency,includeQuote:true})).then(next=>{const old=cache.get(key)?.value?.quote;if(old&&['ok','stale'].includes(old.status)&&(next.quote?.status!=='ok'||Date.parse(next.quote.asOf)<Date.parse(old.asOf)))next.quote={...old,status:'stale'};if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{value:next,expires:Date.now()+20000});return next;}).finally(()=>pending.delete(key)));
    const next=await pending.get(key);value={value:next,expires:Date.now()+20000};
   }
   return new Response(JSON.stringify(value.value),{headers});
