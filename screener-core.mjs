@@ -2,14 +2,18 @@ import{analyzeStrategy}from'./strategy-core.mjs';
 import{liveDailyRows}from'./live-chart-core.mjs';
 import{entrySnapshot}from'./entry-snapshot.mjs';
 export const SCREEN_GROUPS=[{market:'KR',exchange:'KOSPI',label:'코스피'},{market:'KR',exchange:'KOSDAQ',label:'코스닥'},{market:'US',exchange:'NASDAQ',label:'나스닥'},{market:'US',exchange:'NYSE',label:'뉴욕'},{market:'US',exchange:'AMEX',label:'아멕스'},{market:'JP',exchange:'TOKYO',label:'도쿄'}];
+export const LIQUIDITY_LIMITS={KR:1e10,US:2e7,JP:1e9};
+export function liquidityStats(rows){const values=rows.slice(-20).map(p=>p.close*p.volume).filter(Number.isFinite),sorted=[...values].sort((a,b)=>a-b);return{average:values.length===20?values.reduce((a,b)=>a+b,0)/20:null,median:values.length===20?(sorted[9]+sorted[10])/2:null,activeDays:values.filter(v=>v>0).length,last:values.at(-1)??null};}
+export function passesLiquidity(p,level='standard'){if(level==='all')return true;const limit=LIQUIDITY_LIMITS[p.market]*(level==='strict'?2:1),l=p.liquidity;if(Number.isFinite(l?.average))return l.average>=limit&&l.median>=limit*.5&&l.activeDays>=15;return Number.isFinite(p.listTurnover)&&p.listTurnover>=limit*2;}
+export function excludedStock(p){return p.market==='KR'&&(p.symbol==='030960'||/스팩|기업인수목적|SPAC/i.test(p.name));}
 const currency={KR:'KRW',US:'USD',JP:'JPY'},zones={KR:'Asia/Seoul',US:'America/New_York',JP:'Asia/Tokyo'};
 export function screenRow(item,bars,now=new Date()){
  const rows=liveDailyRows({...item,timezone:zones[item.market],bars,collectedAt:now.toISOString()},now).filter(p=>!p.provisional);
  if(rows.length<60)throw Error('Insufficient closed history');const guide=analyzeStrategy(rows),last=guide.frames.at(-1),signal=entrySnapshot(guide,last.asOf),index=signal?guide.frames.findIndex(p=>p.asOf===signal.asOf):-1;
- return{...item,status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
+ return{...item,liquidity:liquidityStats(rows),status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
 }
-export function filterScreen(items,{market='ALL',query='',age=3,state='active',trend='ALL',volume=0}={}){
- return items.filter(p=>p.status==='ok'&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||p.signal&&p.signal.age<(Number(age)===0?1:Number(age)))&&(state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume));
+export function filterScreen(items,{market='ALL',query='',age=3,state='active',trend='ALL',volume=0,liquidity='all',excludeSpecial=false,excluded=[]}={}){
+ return items.filter(p=>p.status==='ok'&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||p.signal&&p.signal.age<(Number(age)===0?1:Number(age)))&&(state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume));
 }
 export const screenKey=p=>p.market+':'+p.symbol;
 export function shardFor(p,count){let h=0;for(const c of screenKey(p))h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h%count;}
@@ -29,7 +33,7 @@ export async function listScreenUniverse(fetcher=fetch,now=new Date(),previous){
      if(stock.stockEndType!=='stock'){excluded++;continue;}
      const symbol=stock.symbolCode||stock.itemCode;
      if(typeof symbol!=='string'||typeof stock.stockName!=='string'||!/^[A-Za-z0-9._^=-]{1,30}$/.test(providerSymbol))throw Error('Invalid stock identity');
-     const item={market:g.market,exchange:g.label,group:g.exchange,symbol,providerSymbol,name:stock.stockName,currency:currency[g.market]};found.set(screenKey(item),item);
+     const rawPrice=Number(String(stock.closePriceRaw??stock.closePrice).replaceAll(',','')),rawVolume=Number(String(stock.accumulatedTradingVolumeRaw??stock.accumulatedTradingVolume).replaceAll(',',''));const item={listTurnover:Number.isFinite(rawPrice*rawVolume)?rawPrice*rawVolume:null,market:g.market,exchange:g.label,group:g.exchange,symbol,providerSymbol,name:stock.stockName,currency:currency[g.market]};found.set(screenKey(item),item);
     }
     if(!added)throw Error('Repeated listing page');page++;
    }
@@ -41,7 +45,7 @@ export async function listScreenUniverse(fetcher=fetch,now=new Date(),previous){
   if(!completed){const old=previous?.items?.filter(p=>p.group===g.exchange)||[],prior=previous?.coverage?.find(p=>p.exchange===g.exchange);
    // Listing freshness and quote freshness are independent. Re-analyse known
    // identities even when live market-cap ordering moves across page boundaries.
-   for(const p of old){const identity={};for(const field of['market','exchange','group','symbol','providerSymbol','name','currency'])identity[field]=p[field];items.set(screenKey(identity),identity);}
+   for(const p of old){const identity={};for(const field of['market','exchange','group','symbol','providerSymbol','name','currency','listTurnover'])identity[field]=p[field];items.set(screenKey(identity),identity);}
    coverage.push({...g,status:old.length?'stale':'unavailable',requested:old.length,source:base,asOf:prior?.asOf||previous?.collectedAt||null,error:String(failure?.message).slice(0,120)});
   }
  }
