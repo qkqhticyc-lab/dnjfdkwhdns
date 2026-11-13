@@ -17,7 +17,8 @@ async function sourceJSON(fetcher,url){let error;for(let attempt=0;attempt<3;att
 export async function listScreenUniverse(fetcher=fetch,now=new Date(),previous){
  const items=new Map(),coverage=[];
  for(const g of SCREEN_GROUPS){const base=g.market==='KR'?`https://m.stock.naver.com/api/stocks/marketValue/${g.exchange}`:`https://api.stock.naver.com/stock/exchange/${g.exchange}/marketValue`;
-  try{let page=1,total=Infinity,seen=new Set(),found=new Map(),excluded=0;
+  let completed=false,failure;
+  for(let attempt=0;attempt<3&&!completed;attempt++)try{let page=1,total=Infinity,seen=new Set(),found=new Map(),excluded=0;
    while((page-1)*100<total){
     const d=await sourceJSON(fetcher,base+`?page=${page}&pageSize=100`);
     if(!Array.isArray(d.stocks)||!Number.isInteger(d.totalCount)||d.totalCount<1||d.totalCount>100000||Number(d.page)!==page||Number(d.pageSize)!==100)throw Error('Invalid list metadata');
@@ -35,8 +36,14 @@ export async function listScreenUniverse(fetcher=fetch,now=new Date(),previous){
    // A rank reshuffle must not silently turn a partial list into a full-universe claim.
    if(seen.size<total)throw Error('Listing changed during pagination; retry next scan');
    for(const [key,item]of found)items.set(key,item);
-   coverage.push({...g,status:'ok',requested:found.size,listed:seen.size,excluded,pages:page-1,source:base,asOf:now.toISOString()});
-  }catch(e){const old=previous?.items?.filter(p=>p.group===g.exchange)||[];for(const p of old)items.set(screenKey(p),{...p,status:'stale'});coverage.push({...g,status:'unavailable',requested:old.length,source:base,error:String(e.message).slice(0,120)});}
+   coverage.push({...g,status:'ok',requested:found.size,listed:seen.size,excluded,pages:page-1,source:base,asOf:now.toISOString()});completed=true;
+  }catch(e){failure=e;}
+  if(!completed){const old=previous?.items?.filter(p=>p.group===g.exchange)||[],prior=previous?.coverage?.find(p=>p.exchange===g.exchange);
+   // Listing freshness and quote freshness are independent. Re-analyse known
+   // identities even when live market-cap ordering moves across page boundaries.
+   for(const p of old){const identity={};for(const field of['market','exchange','group','symbol','providerSymbol','name','currency'])identity[field]=p[field];items.set(screenKey(identity),identity);}
+   coverage.push({...g,status:old.length?'stale':'unavailable',requested:old.length,source:base,asOf:prior?.asOf||previous?.collectedAt||null,error:String(failure?.message).slice(0,120)});
+  }
  }
  return{schemaVersion:1,universeScope:'all-provider-listed',collectedAt:now.toISOString(),coverage,items:[...items.values()].sort((a,b)=>screenKey(a).localeCompare(screenKey(b)))};
 }
