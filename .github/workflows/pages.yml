@@ -52,6 +52,7 @@ jobs:
             gh run download "$scan_id" --name screener-full --dir .cache/screener-full || echo 'Full scan download unavailable; keeping published data.'
           fi
       - run: node scripts/load-screener.mjs
+      - run: node scripts/collect-sectors.mjs
       - run: npm run collect:sentiment
       - run: npm run collect:etfs
       - run: node scripts/refresh-club.mjs

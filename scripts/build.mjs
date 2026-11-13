@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdir, copyFile, readFile } from 'node:fs/promises';
+import { mkdir, copyFile, readFile, writeFile } from 'node:fs/promises';
 import {fingerprintAssets} from './fingerprint-assets.mjs';
 const config=JSON.parse(await readFile('site.config.json','utf8'));
 const key=config.supabase?.publishableKey||'';
@@ -20,5 +20,6 @@ const indicators=JSON.parse(await readFile('data/indicators.json','utf8'));if(in
 const {validateSentimentData}=await import('../sentiment-core.mjs');const sentiment=JSON.parse(await readFile('data/sentiment.json','utf8'));if(!validateSentimentData(sentiment))throw Error('Invalid sentiment data');await copyFile('data/sentiment.json','dist/data/sentiment.json');
 const {validateETFData}=await import('../etf-core.mjs');const etfs=JSON.parse(await readFile('data/etfs.json','utf8'));if(!validateETFData(etfs))throw Error('Invalid ETF data');await copyFile('data/etfs.json','dist/data/etfs.json');
 for(const file of ['screener.json','indicator-history.json'])await copyFile('data/'+file,'dist/data/'+file);
+let sectors={schemaVersion:1,collectedAt:null,items:[],coverage:[]};try{sectors=JSON.parse(await readFile('.cache/sectors/publish/sectors.json','utf8'));if(sectors.schemaVersion!==1||!Array.isArray(sectors.items))throw Error('Invalid sector data');}catch{}await writeFile('dist/data/sectors.json',JSON.stringify(sectors));
 const version=await fingerprintAssets('dist');
 console.log('Built dist/. Assets '+version.revision+'. '+(config.supabase?.url?'Supabase configured.':'Hosting and database connection still required.'));
