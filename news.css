@@ -1,0 +1,75 @@
+.news-page { max-width: 1540px; }
+.news-intro { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 32px 0 18px; }
+.news-intro h1 { font-size: 28px; margin: 0 0 8px; }
+.news-intro p { color: #697e73; font-size: 13px; margin: 0; }
+.news-intro button { flex-shrink: 0; }
+.news-status { color: #677d70; font-size: 12px; margin-bottom: 18px; }
+.news-status.is-warning, .news-source-note.is-warning { color: #a25d18; }
+.news-next { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 23px 26px; margin-bottom: 20px; border-left: 4px solid #24745f; background: #f0f6f1; }
+.news-next .eyebrow { margin: 0 0 9px; letter-spacing: .3px; font-size: 11px; }
+.news-next h2 { font-size: 21px; margin: 0 0 7px; }
+.news-next p:last-child { font-size: 12px; color: #657b6f; margin: 0; }
+.news-next a { flex-shrink: 0; color: #24745f; font-size: 12px; }
+.news-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px; align-items: start; }
+.headline-panel, .calendar-panel { padding: 24px; min-width: 0; }
+.headline-panel, .calendar-panel { scroll-margin-top: 120px; }
+.news-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+.news-section-heading h2 { font-size: 20px; margin: 0; }
+.news-section-heading span, .news-section-heading small { color: #708478; font-size: 11px; }
+.news-controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 13px; }
+.news-controls label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: #6a7e73; min-width: 0; }
+.news-controls select, .news-controls input { font: inherit; font-size: 12px; color: #294c3f; border: 1px solid #d8e3dc; background: #fff; border-radius: 7px; padding: 10px; height: 39px; min-width: 0; width: 100%; }
+.news-controls .news-search { flex: 1 1 130px; }
+.news-source-note { font-size: 11px; color: #75887c; line-height: 1.8; margin: 10px 0; overflow-wrap: anywhere; }
+.headline-list { border-top: 1px solid #dfe7df; }
+.headline-row { padding: 17px 0; border-bottom: 1px solid #e6ece6; }
+.headline-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: #74867b; font-size: 10px; margin-bottom: 8px; }
+.headline-topic { color: #26735f; background: #edf5ef; border-radius: 4px; padding: 2px 6px; }
+.headline-row a { display: block; color: #274a3d; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; text-decoration: none; }
+.headline-row a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.calendar-tabs { display: flex; gap: 7px; margin-bottom: 18px; }
+.calendar-tabs button { padding: 9px 14px; font-size: 12px; }
+.calendar-tabs button[aria-pressed=true] { background: #267561; border-color: #267561; color: #fff; }
+.calendar-date { font-size: 13px; padding: 12px 0 9px; margin: 10px 0 0; border-bottom: 1px solid #dce6dd; }
+.calendar-event { padding: 16px 0; border-bottom: 1px solid #e6ece6; }
+.calendar-event-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 9px; }
+.calendar-event time { font-variant-numeric: tabular-nums; font-weight: 700; color: #456d5c; font-size: 13px; min-width: 42px; }
+.calendar-event h4 { font-size: 14px; line-height: 1.6; margin: 0; }
+.calendar-event-meta { display: flex; flex-wrap: wrap; gap: 8px; color: #7a8b80; font-size: 10px; align-items: center; margin-bottom: 10px; }
+.calendar-state { background: #edf4ee; color: #2b725c; padding: 2px 6px; border-radius: 4px; }
+.calendar-state.pending { background: #fcf1df; color: #986019; }
+.calendar-state.released { background: #eaf0f7; color: #38638c; }
+.calendar-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.calendar-values div { padding: 10px; background: #f4f7f3; border-radius: 6px; min-width: 0; }
+.calendar-values dt { font-size: 10px; color: #6e8275; margin-bottom: 5px; }
+.calendar-values dd { font-size: 14px; color: #294e3e; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
+.calendar-values dd.missing { font-size: 11px; font-weight: 400; color: #85948a; }
+.calendar-extra { font-size: 11px; color: #6d8275; margin: 9px 0 0; }
+.calendar-footnote { border-top: 1px solid #dfe7df; margin-top: 20px; padding-top: 8px; font-size: 10px; color: #74867b; line-height: 1.9; }
+.calendar-footnote a { color: #2e765e; }
+.news-empty { padding: 35px 10px; text-align: center; color: #7b8b80; font-size: 13px; line-height: 1.8; }
+#headline-more, #calendar-more { display: block; margin: 18px auto; font-size: 12px; }
+.news-page [hidden] { display: none !important; }
+.news-page :focus-visible { outline: 3px solid #83ac91; outline-offset: 3px; }
+.news-refresh-note { margin: 20px 0 35px; }
+@media (max-width: 1050px) {
+  .news-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 570px) {
+  .news-intro { padding-top: 24px; flex-wrap: wrap; gap: 13px; }
+  .news-intro h1 { font-size: 25px; }
+  .news-intro p { font-size: 12px; }
+  .news-intro button { font-size: 11px; padding: 9px 12px; }
+  .news-next { padding: 18px; align-items: flex-start; flex-direction: column; gap: 12px; }
+  .news-next h2 { font-size: 18px; }
+  .headline-panel, .calendar-panel { padding: 17px; }
+  .news-section-heading h2 { font-size: 18px; }
+  .calendar-tabs button { padding: 9px 11px; }
+  .news-controls { gap: 8px; }
+  .news-controls label { flex: 1 1 40%; }
+  .news-controls .news-search { flex-basis: 100%; }
+  .calendar-values { gap: 6px; }
+  .calendar-values div { padding: 9px 7px; }
+  .calendar-values dd { font-size: 13px; }
+  .headline-row a { font-size: 13px; }
+}

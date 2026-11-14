@@ -4,6 +4,7 @@ import {initETFs} from './etfs.js';
 import {initAuth} from './auth.js';
 import {initMarket} from './market.js';
 import {initResearch} from './research.js';
+import {initNews} from './news.js';
 import {initCommunity} from './community.js';
 import {initCredit} from './credit.js';
 import {initPositionMonitor} from './position-monitor.js';
@@ -24,6 +25,7 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  const club=page==='club'?initClub(config):null;
  const market=page==='market'?Promise.all([initMarket(config),initIndicators(config),initSentiment()]):null;
  const compare=page==='chart-compare'?initChartCompare(config):null;
+ const news=page==='news'?initNews():null;
  await initAuth(config,community?.onSession);
  if(market)await market;
  if(club)await club;
@@ -31,6 +33,7 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  if(page==='credit'){initPositionMonitor();await initCredit();}
  if(page==='charts')await initCharts(config);
  if(compare)await compare;
+ if(news)await news;
  if(page==='screener')await initScreener();
  if(page==='etfs')await initETFs();
 }).catch(()=>{const box=document.createElement('p');box.className='member-status is-error';box.textContent='서비스 연결을 확인하지 못했습니다. 잠시 후 새로고침해 주세요.';document.querySelector('main').prepend(box);});

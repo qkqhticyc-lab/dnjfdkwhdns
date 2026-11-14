@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="증시 주요 뉴스와 한국·미국 경제지표 발표 일정 및 결과">
+  <title>뉴스 · 부자가 되어보자...</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./site-pages.css">
+  <link rel="stylesheet" href="./news.css">
+  <script src="./app.js" type="module"></script>
+</head>
+<body data-page="news">
+  <header>
+    <a class="brand" href="./index.html"><span>↗</span><b data-title>부자가 되어보자...</b></a>
+    <nav aria-label="주 메뉴">
+      <a href="./index.html">시장 현황</a>
+      <a href="./charts.html">차트</a>
+      <a href="./chart-compare.html">차트비교</a>
+      <a href="./screener.html">진입필터</a>
+      <a href="./news.html" aria-current="page">뉴스</a>
+    </nav>
+    <div class="header-account">
+      <button id="signin" disabled>회원 로그인</button>
+      <button id="signout" hidden>로그아웃</button>
+    </div>
+  </header>
+  <main class="news-page">
+    <div class="news-intro">
+      <div><h1>뉴스와 경제일정</h1><p>증시 주요 소식과 경제지표 발표를 함께 확인하세요.</p></div>
+      <button id="news-refresh" type="button">자료 다시 불러오기 ↻</button>
+    </div>
+    <p id="news-status" class="news-status" role="status">뉴스와 경제일정을 불러오고 있습니다.</p>
+    <div id="news-content" hidden>
+      <section class="news-next panel" aria-labelledby="news-next-title">
+        <div><p class="eyebrow">다음 주요 발표 · 한국시간</p><h2 id="news-next-title"></h2><p id="news-next-detail"></p></div>
+        <a href="#economic-calendar">경제일정 보기 ↓</a>
+      </section>
+      <div class="news-layout">
+        <section id="market-headlines" class="panel headline-panel" aria-labelledby="headline-title">
+          <div class="news-section-heading"><h2 id="headline-title">증시 주요 뉴스</h2><span id="headline-count" aria-live="polite"></span></div>
+          <div class="news-controls">
+            <label>분류<select id="news-topic"><option value="">전체 주제</option></select></label>
+            <label>뉴스 출처<select id="news-feed"><option value="">전체</option><option value="domestic">국내 매체</option><option value="global">해외 매체</option></select></label>
+            <label class="news-search">검색<input id="news-search" type="search" placeholder="종목·금리·키워드" autocomplete="off"></label>
+          </div>
+          <p id="headline-freshness" class="news-source-note"></p>
+          <div id="headline-list" class="headline-list"></div>
+          <button id="headline-more" type="button" hidden>뉴스 더 보기</button>
+          <p class="news-source-note">Npay 증권 주요 뉴스와 해외 뉴스에서 증시·금리·환율·정책·기업 관련 제목을 선별합니다. 제목을 누르면 제공처 원문이 열립니다.</p>
+        </section>
+        <section id="economic-calendar" class="panel calendar-panel" aria-labelledby="calendar-title">
+          <div class="news-section-heading"><h2 id="calendar-title">경제지표 발표</h2><small>한국시간 KST</small></div>
+          <div class="calendar-tabs" aria-label="발표 상태">
+            <button type="button" data-calendar-view="upcoming" aria-pressed="true">발표 예정</button>
+            <button type="button" data-calendar-view="released" aria-pressed="false">발표 결과</button>
+            <button type="button" data-calendar-view="all" aria-pressed="false">전체</button>
+          </div>
+          <div class="news-controls calendar-controls">
+            <label>국가<select id="calendar-country"><option value="">한국·미국</option><option value="KOR">한국</option><option value="USA">미국</option></select></label>
+            <label>중요도<select id="calendar-impact"><option value="major">주요 지표</option><option value="all">전체 지표</option></select></label>
+            <label class="news-search">지표 검색<input id="calendar-search" type="search" placeholder="CPI·고용·금리" autocomplete="off"></label>
+          </div>
+          <p id="calendar-summary" class="news-source-note" aria-live="polite"></p>
+          <p id="calendar-freshness" class="news-source-note"></p>
+          <div id="calendar-list" class="calendar-list"></div>
+          <button id="calendar-more" type="button" hidden>경제일정 더 보기</button>
+          <div class="calendar-footnote">
+            <p>한국·미국 지표의 최근 2주와 앞으로 30일을 수집합니다. 주요 지표는 물가·성장·고용·금리 등과 제공처 영향력 ‘높음’ 이상입니다.</p>
+            <p>발표·이전·예상 수치는 제공된 값만 표시합니다. K는 천, M은 백만, B는 십억입니다. 발표 시각이 지난 일정도 결과가 확인되어야 발표 완료로 표시합니다.</p>
+            <a href="https://stock.naver.com/" target="_blank" rel="noopener noreferrer">Npay 증권 경제 캘린더 ↗</a>
+          </div>
+        </section>
+      </div>
+      <p class="news-source-note news-refresh-note">수집은 약 30분 간격이며 배포·제공처 사정에 따라 지연될 수 있습니다. 페이지를 여는 동안 새로 배포된 자료를 5분마다 확인합니다.</p>
+    </div>
+    <noscript><p>뉴스와 경제일정을 보려면 자바스크립트를 활성화해 주세요.</p></noscript>
+  </main>
+</body>
+</html>

@@ -38,6 +38,12 @@ jobs:
           key: research-v1-${{ github.run_id }}
           restore-keys: research-v1-
       - run: npm run collect:research
+      - uses: actions/cache@v4
+        with:
+          path: .cache/news
+          key: news-v1-${{ github.run_id }}
+          restore-keys: news-v1-
+      - run: npm run collect:news
       - run: node scripts/collect-market.mjs
       - run: node scripts/collect-us-futures.mjs
       - run: npm run collect:credit

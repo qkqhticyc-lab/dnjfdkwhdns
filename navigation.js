@@ -10,7 +10,7 @@ export function initNavigation(config){
   host.append(button,menu);nav.append(host);
  }
  nav.replaceChildren(link('index.html','시장 현황'),link('charts.html','차트'),link('chart-compare.html','차트비교'),link('screener.html','진입필터'));
- group('references','참고자료',[['etfs.html','ETF 도우미'],['reports.html','리포트']]);nav.append(link('credit.html','신용잔고'));
+ group('references','참고자료',[['etfs.html','ETF 도우미'],['reports.html','리포트'],['news.html','뉴스']]);nav.append(link('credit.html','신용잔고'));
  group('journals','매매일지',[['club.html','정버핏모임'],['community.html','나의 반성일기'],['journals.html','당신들의 반성일기']]);
  const account=document.createElement('a');account.href=config.privateJournalUrl;account.textContent='계좌 매매일지 🔒';account.dataset.private='';account.hidden=true;nav.append(account);
  document.addEventListener('click',e=>{if(!nav.contains(e.target))closeAll();});const reposition=()=>groups.forEach(g=>g.position());window.addEventListener('resize',()=>closeAll());window.addEventListener('scroll',reposition,{passive:true});nav.addEventListener('scroll',reposition,{passive:true});
