@@ -5,6 +5,8 @@ import {
   settleNewsFeed, validateMarketNews, koreaDay, shiftDay, safeNewsUrl,
 } from '../market-news-core.mjs';
 import { collectEconomicCalendar, collectDomesticNews, collectGlobalNews } from '../market-news-source.mjs';
+import { compareIndicatorForecast, matchCalendarConsensus, parseIndicatorNumber } from '../calendar-consensus-core.mjs';
+import { enrichCalendarConsensus, consensusQueryDay } from '../scripts/calendar-consensus.mjs';
 
 const now = Date.parse('2026-11-14T10:00:00Z');
 const date = '2026-11-14';
@@ -118,4 +120,83 @@ test('headline collectors use major-news category, follow foreign cursor, and re
   assert.equal(global.items.length, 1);
   assert.match(global.items[0].url, /\/news\/worldnews\//);
   await assert.rejects(collectDomesticNews(now, async () => response({ articles: [] })), /Empty/);
+});
+
+test('forecast comparison handles signs, zero, scaled units and missing values', () => {
+  assert.equal(compareIndicatorForecast('0.40%', '0.3%'), 'above');
+  assert.equal(compareIndicatorForecast('0.30%', '0.3%'), 'equal');
+  assert.equal(compareIndicatorForecast('0.20%', '0.3%'), 'below');
+  assert.equal(compareIndicatorForecast('-105.00B', '-107.9B'), 'above');
+  assert.equal(compareIndicatorForecast('-1.5%', '-0.5%'), 'below');
+  assert.equal(compareIndicatorForecast(0, '0.0'), 'equal');
+  assert.equal(compareIndicatorForecast('−0.0%', '0%'), 'equal');
+  assert.equal(compareIndicatorForecast('1,000K', '1.0M'), 'equal');
+  for (const value of [null, '', '-', '미제공', '1~2', 'NaN', '1.2% revised']) assert.equal(parseIndicatorNumber(value), null);
+  assert.equal(compareIndicatorForecast('3%', '3'), null);
+  assert.equal(compareIndicatorForecast('3', null), null);
+});
+
+test('consensus matches an exact release clock, country, name, units and actual', () => {
+  const event = normalizeCalendarEvent(rawEvent({ information: [{ label: '발표', value: '0.40%' }] }), '2026-11-10');
+  const row = { country: 'United States', gmt: '08:30', eventName: 'CPI', actual: '0.4%', consensus: '0.3%', previous: '0.6%' };
+  assert.deepEqual(matchCalendarConsensus(event, [row]), { forecast: '0.3%', previous: '0.6%' });
+  assert.equal(matchCalendarConsensus(event, [{ ...row, country: 'South Korea' }]), null);
+  assert.equal(matchCalendarConsensus(event, [{ ...row, gmt: '09:30' }]), null);
+  assert.equal(matchCalendarConsensus(event, [{ ...row, eventName: 'Core CPI' }]), null);
+  assert.equal(matchCalendarConsensus(event, [{ ...row, actual: '0.5%' }]), null);
+  assert.equal(matchCalendarConsensus(event, [{ ...row, actual: '0.4' }]), null);
+  assert.equal(matchCalendarConsensus(event, [row, { ...row }]), null);
+});
+
+test('upcoming YoY and MoM releases require a unique same prior before forecasting', () => {
+  const event = normalizeCalendarEvent(rawEvent({ information: [{ label: '이전', value: '0.60%' }] }), '2026-11-10');
+  const monthly = { country: 'United States', gmt: '08:30', eventName: 'CPI', actual: '&nbsp;', consensus: '0.3%', previous: '0.6%' };
+  const yearly = { ...monthly, consensus: '3.7%', previous: '3.8%' };
+  assert.equal(matchCalendarConsensus(event, [monthly, yearly]).forecast, '0.3%');
+  assert.equal(matchCalendarConsensus({ ...event, previous: null }, [monthly]), null);
+  assert.equal(matchCalendarConsensus(event, [{ ...monthly, consensus: ' ' }]), null);
+  const housing = { ...event, code: 'USHST=ECIX', previous: '1.22M' };
+  const row = { ...monthly, eventName: 'Housing Starts', previous: '1.221M', consensus: '1.230M' };
+  assert.equal(matchCalendarConsensus(housing, [row]).forecast, '1.230M');
+  assert.equal(matchCalendarConsensus(housing, [{ ...row, previous: '1.225M' }]), null);
+});
+
+test('consensus source sessions handle New York DST and KST date rollover', () => {
+  const winter = normalizeCalendarEvent(rawEvent(), '2026-11-10');
+  assert.equal(consensusQueryDay(winter), '2026-11-11');
+  const summer = { ...winter, scheduledAt: '2026-07-10T12:30:00.000Z' };
+  const row = { country: 'United States', gmt: '08:30', eventName: 'CPI', actual: '0.4%', consensus: '0.3%', previous: '0.6%' };
+  assert.equal(matchCalendarConsensus({ ...summer, actual: '0.4%' }, [row]).forecast, '0.3%');
+  const midnightKst = { ...winter, scheduledAt: '2026-11-12T15:00:00.000Z' };
+  assert.equal(consensusQueryDay(midnightKst), '2026-11-13');
+});
+
+test('supplemental source failure preserves only the same release forecast and timestamp', async () => {
+  const event = normalizeCalendarEvent(rawEvent({ information: [{ label: '발표', value: '0.40%' }] }), '2026-11-10');
+  const calendar = { from: '2026-10-31', to: '2026-12-14', items: [event] };
+  const old = { ...event, forecast: '0.3%', forecastSource: 'Nasdaq', forecastFetchedAt: '2026-11-10T14:00:00Z' };
+  const result = await enrichCalendarConsensus(calendar, { items: [old] }, now, async () => { throw Error('Source down'); });
+  assert.equal(result.items[0].forecast, '0.3%');
+  assert.equal(result.items[0].forecastFetchedAt, old.forecastFetchedAt);
+  assert.equal(result.items[0].forecastStale, true);
+  assert.equal(result.consensus.status, 'partial');
+  const moved = { ...old, scheduledAt: '2026-11-11T13:30:00Z' };
+  const missing = await enrichCalendarConsensus(calendar, { items: [moved] }, now, async () => { throw Error('Source down'); });
+  assert.equal(missing.items[0].forecast, null);
+});
+
+test('consensus collection retains provenance and copies only market data', async () => {
+  const event = normalizeCalendarEvent(rawEvent({ information: [{ label: '발표', value: '0.40%' }] }), '2026-11-10');
+  let requested;
+  const result = await enrichCalendarConsensus({ items: [event] }, null, now, async url => {
+    requested = url;
+    return response({ status: { rCode: 200 }, data: { rows: [{ country: 'United States', gmt: '08:30', eventName: 'CPI',
+      actual: '0.4%', consensus: '0.3%', previous: '0.6%', description: 'Full article must be omitted' }] } });
+  });
+  assert.match(requested, /date=2026-11-11$/);
+  assert.equal(result.items[0].forecast, '0.3%');
+  assert.equal(result.items[0].forecastSource, 'Nasdaq');
+  assert.equal(result.items[0].forecastStale, false);
+  assert.equal(result.items[0].description, undefined);
+  assert.equal(result.consensus.matched, 1);
 });

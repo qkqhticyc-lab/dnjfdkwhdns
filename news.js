@@ -1,8 +1,10 @@
 import {
   NEWS_TOPICS, CALENDAR_COUNTRIES, calendarStatus, koreaDay, mergeHeadlines, safeNewsUrl, validateMarketNews,
 } from './market-news-core.mjs';
+import { compareIndicatorForecast } from './calendar-consensus-core.mjs';
 
 const STATUS_LABELS = { upcoming: '발표 예정', pending: '결과 확인 중', released: '발표 완료' };
+const FORECAST_LABELS = { above: '예측치 상회', equal: '예측치 부합', below: '예측치 하회' };
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -70,7 +72,7 @@ export async function initNews() {
       .sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '23:59').localeCompare(String(b.time || '23:59')))[0];
     byId('news-next-title').textContent = next ? `${CALENDAR_COUNTRIES[next.country]} · ${next.title}` : '확인된 다음 주요 발표가 없습니다';
     byId('news-next-detail').textContent = next
-      ? `${next.date} ${next.time || '시각 미정'} KST${next.previous ? ` · 이전 ${next.previous}` : ''}`
+      ? `${next.date} ${next.time || '시각 미정'} KST${next.forecast ? ` · 예측 ${next.forecast}` : ''}${next.previous ? ` · 이전 ${next.previous}` : ''}`
       : '경제일정의 수집 시각과 갱신 상태를 확인해 주세요.';
   }
 
@@ -101,12 +103,14 @@ export async function initNews() {
     byId('calendar-summary').textContent = `예정 ${counts.upcoming} · 발표 완료 ${counts.released} · 결과 확인 중 ${counts.pending} / 검색 결과 ${items.length}건`;
     const freshness = byId('calendar-freshness');
     freshness.textContent = `${feedMessage(data.calendar, '경제일정')} · ${data.calendar.from || '—'} ~ ${data.calendar.to || '—'}`;
+    if (data.calendar.consensus?.status === 'partial') freshness.textContent += ' · 예측치 일부 조회 지연';
     freshness.classList.toggle('is-warning', data.calendar.status !== 'ok' || Date.now() - Date.parse(data.calendar.fetchedAt) > 2 * 3600000);
     const list = byId('calendar-list');
     list.replaceChildren();
     let lastGroup;
     for (const item of items.slice(0, calendarLimit)) {
       const state = calendarStatus(item);
+      const comparison = compareIndicatorForecast(item.actual, item.forecast);
       const group = item.date + (calendarView === 'upcoming' ? state : '');
       if (group !== lastGroup) {
         const dayLabel = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', weekday: 'short' })
@@ -122,14 +126,26 @@ export async function initNews() {
       const meta = element('div', 'calendar-event-meta');
       meta.append(element('span', '', CALENDAR_COUNTRIES[item.country]), element('span', 'calendar-state ' + state, STATUS_LABELS[state]));
       if (item.major) meta.append(element('span', '', '주요 지표'));
+      if (comparison) meta.append(element('span', 'forecast-comparison forecast-' + comparison, FORECAST_LABELS[comparison]));
       const values = element('dl', 'calendar-values');
-      for (const [label, value] of [['발표', item.actual], ['이전', item.previous], ['이전 대비', item.change]]) {
+      for (const [label, value] of [['발표', item.actual], ['예측치', item.forecast], ['이전', item.previous]]) {
         const cell = element('div');
-        cell.append(element('dt', '', label), element('dd', value === null ? 'missing' : '', value ?? (label === '발표' && state !== 'released' ? '발표 대기' : '미제공')));
+        let className = value === null ? 'missing' : '';
+        if (label === '발표' && comparison) className = 'forecast-' + comparison;
+        cell.append(element('dt', '', label), element('dd', className, value ?? (label === '발표' && state !== 'released' ? '발표 대기' : '미제공')));
         values.append(cell);
       }
       row.append(heading, meta, values);
-      if (item.forecast !== null) row.append(element('p', 'calendar-extra', `시장 예상 ${item.forecast}`));
+      if (item.change !== null) row.append(element('p', 'calendar-extra', `이전 대비 ${item.change}`));
+      if (item.forecastSource === 'Nasdaq') {
+        const source = element('p', 'calendar-extra');
+        const link = element('a', '', '예측치 Nasdaq ↗');
+        link.href = 'https://www.nasdaq.com/market-activity/economic-calendar';
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        source.append(link, document.createTextNode(` · ${stamp(item.forecastFetchedAt)} KST 확인${item.forecastStale ? ' · 갱신 지연' : ''}`));
+        row.append(source);
+      }
       list.append(row);
     }
     if (!items.length) list.append(element('p', 'news-empty', data.calendar.status === 'unavailable'

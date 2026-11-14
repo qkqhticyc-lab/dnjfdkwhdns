@@ -44,9 +44,15 @@
 .calendar-values dt { font-size: 10px; color: #6e8275; margin-bottom: 5px; }
 .calendar-values dd { font-size: 14px; color: #294e3e; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
 .calendar-values dd.missing { font-size: 11px; font-weight: 400; color: #85948a; }
+.forecast-comparison { font-weight: 700; }
+.calendar-values dd.forecast-above, .forecast-above { color: #c63336; }
+.calendar-values dd.forecast-below, .forecast-below { color: #245db5; }
+.calendar-values dd.forecast-equal, .forecast-equal { color: #171717; }
+.forecast-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; margin: 0 0 14px; }
+.calendar-extra a { color: #47745e; text-underline-offset: 3px; }
 .calendar-extra { font-size: 11px; color: #6d8275; margin: 9px 0 0; }
 .calendar-footnote { border-top: 1px solid #dfe7df; margin-top: 20px; padding-top: 8px; font-size: 10px; color: #74867b; line-height: 1.9; }
-.calendar-footnote a { color: #2e765e; }
+.calendar-footnote a { color: #2e765e; display: inline-block; margin-right: 12px; }
 .news-empty { padding: 35px 10px; text-align: center; color: #7b8b80; font-size: 13px; line-height: 1.8; }
 #headline-more, #calendar-more { display: block; margin: 18px auto; font-size: 12px; }
 .news-page [hidden] { display: none !important; }

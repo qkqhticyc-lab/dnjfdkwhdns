@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { collectDomesticNews, collectGlobalNews, collectEconomicCalendar } from '../market-news-source.mjs';
 import { settleNewsFeed, validateMarketNews } from '../market-news-core.mjs';
+import { collectCalendarConsensus } from './calendar-consensus.mjs';
 
 const CACHE = '.cache/news';
 const SITE = 'https://qkqhticyc-lab.github.io/dnjfdkwhdns/';
@@ -23,6 +24,10 @@ try {
 const results = await Promise.allSettled([
   collectDomesticNews(now), collectGlobalNews(now), collectEconomicCalendar(now),
 ]);
+if (results[2].status === 'fulfilled') {
+  results[2].value = await collectCalendarConsensus(results[2].value, previous?.calendar, now);
+  console.log(`Calendar consensus: ${results[2].value.consensus.matched} matched`);
+}
 const output = { schemaVersion: 1, attemptedAt, refreshMinutes: 30 };
 for (const [index, name] of ['domestic', 'global', 'calendar'].entries()) {
   output[name] = settleNewsFeed(previous?.[name], results[index], attemptedAt);
