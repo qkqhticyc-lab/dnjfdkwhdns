@@ -6,6 +6,7 @@ import {initMarket} from './market.js';
 import {initResearch} from './research.js';
 import {initCommunity} from './community.js';
 import {initCredit} from './credit.js';
+import {initPositionMonitor} from './position-monitor.js';
 import {initIndicators} from './indicators.js';
 import {initCharts} from './charts.js';
 import {initNavigation} from './navigation.js';
@@ -24,7 +25,7 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  if(market)await market;
  if(club)await club;
  if(page==='reports')await initResearch();
- if(page==='credit')await initCredit();
+ if(page==='credit'){initPositionMonitor();await initCredit();}
  if(page==='charts')await initCharts(config);
  if(page==='screener')await initScreener();
  if(page==='etfs')await initETFs();

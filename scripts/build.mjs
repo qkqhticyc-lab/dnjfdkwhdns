@@ -16,6 +16,12 @@ await copyFile('data/market.json','dist/data/market.json');await copyFile('data/
 const credit=JSON.parse(await readFile('data/credit.json','utf8'));
 const {validateCreditData}=await import('../credit-core.mjs');if(!validateCreditData(credit))throw Error('Invalid credit data');
 await copyFile('data/credit.json','dist/data/credit.json');
+await copyFile('position-monitor.css','dist/position-monitor.css');
+const {validatePositionMonitor}=await import('../position-monitor-core.mjs');
+let positions={schemaVersion:1,kr:{status:'unavailable',rows:[]},us:{status:'unavailable',rows:[]}};
+try{positions=JSON.parse(await readFile('.cache/position-monitor/publish.json','utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
+if(!validatePositionMonitor(positions))throw Error('Invalid position monitor data');
+await writeFile('dist/data/position-monitor.json',JSON.stringify(positions));
 const indicators=JSON.parse(await readFile('data/indicators.json','utf8'));if(indicators.schemaVersion!==1||indicators.items?.length!==12)throw Error('Invalid indicator data');await copyFile('data/indicators.json','dist/data/indicators.json');
 const {validateSentimentData}=await import('../sentiment-core.mjs');const sentiment=JSON.parse(await readFile('data/sentiment.json','utf8'));if(!validateSentimentData(sentiment))throw Error('Invalid sentiment data');await copyFile('data/sentiment.json','dist/data/sentiment.json');
 const {validateETFData}=await import('../etf-core.mjs');const etfs=JSON.parse(await readFile('data/etfs.json','utf8'));if(!validateETFData(etfs))throw Error('Invalid ETF data');await copyFile('data/etfs.json','dist/data/etfs.json');
