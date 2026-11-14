@@ -3,3 +3,15 @@
 .screen-presets,.screen-chip-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.screen-chip-row>span{min-width:110px;font-size:12px;color:#6d8177}.screen-presets button,.screen-chip-row button{border-radius:22px;padding:8px 13px;font-size:12px;min-height:38px}.screen-presets [aria-pressed=true],.screen-chip-row [aria-pressed=true]{background:#257562;color:white}.screen-quick-select{display:none!important}@media(max-width:600px){.screen-chip-row{flex-wrap:nowrap;overflow:auto;padding-bottom:5px}.screen-chip-row>span{min-width:62px}.screen-chip-row button{flex-shrink:0}.screen-controls{margin-top:14px}.screen-presets button{flex:1;font-size:11px;padding:8px}.screen-presets{gap:4px}}
 .screen-chip-row[hidden],.screen-candidate-note[hidden]{display:none}.screen-candidate-note{padding:14px 16px;border:1px solid #e7d4ad;border-radius:9px;background:#fff8ec;color:#795921;font-size:12px;line-height:1.8}.screen-candidate-conditions{white-space:normal;text-align:left;max-width:290px;font-size:12px}.screen-candidate-conditions summary{cursor:pointer;color:#8b6223}.screen-candidate-conditions ul{padding-left:18px;margin:9px 0}.screen-candidate-conditions li{margin:5px 0;line-height:1.65}.screen-candidate-cards{display:none}.screen-candidate-card{padding:15px;min-width:0}.screen-candidate-card-head{display:flex;gap:8px;flex-wrap:wrap;align-items:start;justify-content:space-between}.screen-candidate-card a{color:#236a58;text-decoration:underline;font-weight:600}.screen-candidate-card-head span{font-size:11px;color:#8b6223;background:#fff1d9;padding:2px 6px;border-radius:5px}.screen-candidate-card small{display:block;color:#788c82;font-size:11px;line-height:1.8;margin-top:7px}.screen-candidate-card p{font-size:12px;line-height:1.8;margin-top:8px}.screen-candidate-card details{margin-top:10px;max-width:none}.screen-candidate-card>button{margin-top:12px;font-size:11px;padding:6px 10px}@media(max-width:600px){.screen-candidate-mode .screen-table-wrap{display:none}.screen-candidate-mode .screen-candidate-cards{display:grid;gap:12px}.screen-candidate-note{font-size:12px}}
 .screen-candidate-mode .screen-table td:nth-child(11){min-width:230px}.screen-candidate-mode .screen-table td{vertical-align:top}
+.screen-chip-row.screen-entry-types{display:grid;grid-template-columns:110px minmax(0,1fr);align-items:start;gap:8px;overflow:visible}
+.screen-entry-types>span{padding-top:10px}
+.screen-entry-options{display:grid;gap:8px;min-width:0}
+.screen-entry-row{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+@media(max-width:600px){
+ .screen-chip-row.screen-entry-types{grid-template-columns:1fr;gap:7px;padding-bottom:0}
+ .screen-entry-types>span{padding-top:0}
+ .screen-entry-row{gap:6px}
+ .screen-entry-row button{padding:8px 11px}
+ .screen-rebound-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .screen-rebound-row button{min-width:0;white-space:normal}
+}

@@ -34,7 +34,39 @@ export async function initScreener(){let data,sectorData,shown=50,liquidity='sta
  }
  async function load(){try{$('screen-refresh').disabled=true;const sectorPromise=fetch('./data/sectors.json',{cache:'no-store'}).then(async r=>{if(!r.ok)throw Error();const d=await r.json();if(d.schemaVersion!==1||!Array.isArray(d.items))throw Error();return d;}).catch(()=>null);const r=await fetch('./data/screener.json',{cache:'no-store'});if(!r.ok)throw Error();const d=await r.json();if(d.schemaVersion!==1||d.rulesVersion!=='independent-v3'||!Array.isArray(d.items))throw Error();if(!data||d.collectedAt>=data.collectedAt)data=d;const next=await sectorPromise;if(next?.collectedAt&&(!sectorData||next.collectedAt>=sectorData.collectedAt))sectorData=next;const sectors=new Map((sectorData?.items||[]).map(p=>[p.key,p]));data.items=data.items.map(p=>({...p,sector:sectors.get(p.market+':'+p.symbol)||{id:'unknown',industry:null}}));syncIndustries();draw();}catch{$('screen-warning').textContent='검색 자료를 불러오지 못했습니다. 이전 결과가 있으면 그대로 유지합니다.';}finally{$('screen-refresh').disabled=false;}}
  const quickRows=new Map();
- for(const id of ['screen-market','screen-age','screen-state','screen-entry-type']){const select=$(id),group=el('div');group.className='screen-chip-row';group.append(el('span',select.parentElement.firstChild.textContent));for(const option of select.options){const b=el('button',option.textContent);b.type='button';b.dataset.value=option.value;b.setAttribute('aria-pressed',String(select.value===option.value));b.onclick=()=>{select.value=option.value;select.dispatchEvent(new Event('input'));};group.append(b);}select.addEventListener('input',()=>{for(const b of group.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.value===select.value));});$('screen-quick').append(group);quickRows.set(id,group);select.parentElement.classList.add('screen-quick-select');}
+ for (const id of ['screen-market', 'screen-age', 'screen-state', 'screen-entry-type']) {
+  const select = $(id), group = el('div');
+  group.className = 'screen-chip-row';
+  group.append(el('span', select.parentElement.firstChild.textContent));
+  let options = group, rebound;
+  if (id === 'screen-entry-type') {
+   group.classList.add('screen-entry-types');
+   options = el('div');
+   options.className = 'screen-entry-options';
+   const main = el('div');
+   main.className = 'screen-entry-row';
+   rebound = el('div');
+   rebound.className = 'screen-entry-row screen-rebound-row';
+   options.append(main, rebound);
+   group.append(options);
+   options = main;
+  }
+  for (const option of select.options) {
+   const button = el('button', option.textContent);
+   button.type = 'button';
+   button.dataset.value = option.value;
+   button.setAttribute('aria-pressed', String(select.value === option.value));
+   button.onclick = () => { select.value = option.value; select.dispatchEvent(new Event('input')); };
+   const isRebound = ['reboundCandidate', 'oversoldBounce'].includes(option.value);
+   (isRebound && rebound ? rebound : options).append(button);
+  }
+  select.addEventListener('input', () => {
+   for (const button of group.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.value === select.value));
+  });
+  $('screen-quick').append(group);
+  quickRows.set(id, group);
+  select.parentElement.classList.add('screen-quick-select');
+ }
  $('screen-entry-type').addEventListener('input',()=>{const next=$('screen-entry-type').value==='reboundCandidate';if(next&&!candidateMode){savedEntryFilters={age:$('screen-age').value,state:$('screen-state').value};$('screen-age').value='all';$('screen-state').value='all';}else if(!next&&candidateMode&&savedEntryFilters){$('screen-age').value=savedEntryFilters.age;$('screen-state').value=savedEntryFilters.state;}candidateMode=next;$('screen-sort').options[0].textContent=next?'최근 관찰 시작순':'최근 신호순';$('screen-age').querySelector('[value=all]').textContent=next?'현재 후보 전체':'전체 이력';quickRows.get('screen-age').querySelector('[data-value=all]').textContent=next?'현재 후보 전체':'전체 이력';quickRows.get('screen-state').hidden=next;quickRows.get('screen-age').querySelector('span').textContent=next?'관찰 시작':'최근 진입 신호';for(const id of ['screen-age','screen-state'])for(const b of quickRows.get(id).querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.value===$(id).value));const u=new URL(location.href);if(next)u.searchParams.set('view','rebound');else u.searchParams.delete('view');history.replaceState(null,'',u);});
  $('screen-presets').onclick=e=>{const b=e.target.closest('[data-liquidity]');if(!b)return;liquidity=b.dataset.liquidity;shown=50;for(const n of $('screen-presets').children)n.setAttribute('aria-pressed',String(n===b));draw();};$('screen-reset-excluded').onclick=()=>{excluded=[];try{localStorage.removeItem('screen-excluded-v1');}catch{}draw();};
  controls.forEach(id=>$(id).addEventListener('input',()=>{shown=50;draw();}));$('screen-more').onclick=()=>{shown+=50;draw();};$('screen-refresh').onclick=load;if(new URLSearchParams(location.search).get('view')==='rebound'){$('screen-entry-type').value='reboundCandidate';$('screen-entry-type').dispatchEvent(new Event('input'));}await load();setInterval(()=>{if(!document.hidden)load();},300000);
