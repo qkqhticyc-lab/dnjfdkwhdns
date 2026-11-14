@@ -8,6 +8,7 @@ on:
       - 'strategy-core.mjs'
       - 'pattern-core.mjs'
       - 'oversold-core.mjs'
+      - 'rebound-candidate-core.mjs'
       - 'chart-guide-core.mjs'
       - 'technical-core.mjs'
       - 'risk-levels.mjs'

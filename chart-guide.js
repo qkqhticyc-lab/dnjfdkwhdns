@@ -1,3 +1,4 @@
+import{reboundCandidate}from'./rebound-candidate-core.mjs';
 import{entryTrigger,ENTRY_KEYS}from'./entry-types.mjs';
 import{formatPrice,formatTarget,formatPriceReason,displayPrice}from'./price-display.mjs';
 import{viewWindow,setWindow,zoomWindow,scalePrice,chartPaneLayout,volumeFractionAt,chartHorizontalLayout}from'./chart-viewport.mjs';
@@ -57,7 +58,7 @@ export function guideView(data,options={}){
   if(frame.status==='stale'||data.status==='stale')content.append(el('p','새 자료 연결 지연 · 이전 분석과 원래 기준 시각을 유지합니다.','guide-notice'));
   content.append(el('p',frame.sessionNote||'진행 봉 포함 · 30초마다 조회','guide-note'));
   if(frame.sourceThrough)content.append(el('p',(frame.timeframe==='4h'?'분봉 기준 ':'가격·일봉 조회 기준 ')+new Date(frame.sourceThrough).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST · 제공처 지연 가능','guide-note'));
-  const bounce=frames.at(-1).bounce;if(bounce?.state==='watch'){const note=el('div',null,'guide-bounce guide-notice');note.dataset.bounceState='watch';note.append(el('strong','낙폭 과대 관찰 · 반등 확인 대기'),el('p','관찰 시작 '+when(bounce.asOf,frame)+' · 낙폭 '+num(bounce.dropPct,1)+'% · 관찰 구간 최저 RSI '+num(bounce.minRsi,1)),el('p',bounce.blocked.map(s=>s.replace('RSI 30 회복 및 상승 확인','RSI 30 초과~50 이하에서 상승 확인')).join(' · ')),el('p','진입 신호가 아닙니다. 저점 갱신 중에는 기다리며, 관찰은 최초 조건 충족 후 10봉까지입니다.'));content.append(note);}
+  const candidate=reboundCandidate(guide.frames.slice(0,window.end)),bounce=frames.at(-1).bounce;if(bounce?.state==='watch'){const note=el('div',null,'guide-bounce guide-notice');note.dataset.bounceState='watch';note.append(el('strong',candidate?'반등 후보 구간 · 확인 전':'낙폭 과대 관찰 · 반등 확인 대기'),el('p','관찰 시작 '+when(bounce.asOf,frame)+' · 낙폭 '+num(bounce.dropPct,1)+'% · 관찰 구간 최저 RSI '+num(bounce.minRsi,1)),el('p',bounce.blocked.map(s=>s.replace('RSI 30 회복 및 상승 확인','RSI 30 초과~50 이하에서 상승 확인')).join(' · ')),el('p','진입 신호가 아닙니다. 저점 갱신 중에는 기다리며, 관찰은 최초 조건 충족 후 10봉까지입니다.'));if(candidate){note.dataset.reboundCandidate='true';note.append(el('p','관찰 가격대 '+price(candidate.lower)+' ~ '+price(candidate.upper)+' '+data.currency+' · '+(candidate.newLow?'저점 갱신 중 · 하락 주의':'반등 확인 대기')+' · 매수 권장 가격대가 아닙니다.'));}content.append(note);}
   const trade=frames.at(-1).trade,plan=buildTradePlan(guide.frames.slice(0,window.end),{maxRiskPct:prefs.maxRiskPct}),distance=v=>Number.isFinite(v)?((v/plan.entry-1)*100>=0?'+':'')+num((v/plan.entry-1)*100,2)+'%':'—';
   const signal=entrySnapshot(guide,frames.at(-1).asOf),signalCard=el('div',null,'guide-entry');signalCard.dataset.entryStatus=signal?.status||'none';signalCard.dataset.entryType=signal?.entryType||'none';
   signalCard.append(el('h3',view.follow?'최근 진입 신호':'이 시점까지의 최근 진입 신호'));
