@@ -6,4 +6,6 @@
 
 .guide-bounce strong{display:block}.guide-bounce p{margin:6px 0;line-height:1.7}.guide-entry[data-entry-type=oversoldBounce]{border-color:#e5c491;background:#fff9ef}
 
-.guide-entry-value{display:flex;align-items:baseline;gap:3px 6px;flex-wrap:wrap}.guide-entry-grid .guide-entry-value strong{font-size:15px}.guide-entry-percent{font-size:11px;font-weight:600;white-space:nowrap}.guide-entry[data-entry-status=closed] h3,.guide-entry[data-entry-status=closed] .guide-entry-state{color:#626b65}
+.guide-entry-value{display:flex;align-items:baseline;gap:3px;flex-wrap:nowrap}.guide-entry .guide-entry-grid .guide-entry-value strong{font-size:13px;white-space:nowrap}.guide-entry-percent{font-size:10px;font-weight:600;white-space:nowrap}.guide-entry[data-entry-status=closed] h3,.guide-entry[data-entry-status=closed] .guide-entry-state{color:#626b65}
+
+.guide-entry-currency{font-size:9px;font-weight:500}.guide-entry .guide-entry-grid .guide-entry-value[data-compact=true] strong{font-size:11px}
