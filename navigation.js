@@ -9,7 +9,7 @@ export function initNavigation(config){
   host.onfocusout=()=>setTimeout(()=>{if(!host.contains(document.activeElement))g.set(false);},0);host.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();g.set(false);button.focus();}else if(e.target===button&&['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();closeAll(g);g.set(true);(e.key==='ArrowDown'?menu.firstElementChild:menu.lastElementChild)?.focus();}};
   host.append(button,menu);nav.append(host);
  }
- nav.replaceChildren(link('index.html','시장 현황'),link('charts.html','차트'),link('screener.html','진입필터'));
+ nav.replaceChildren(link('index.html','시장 현황'),link('charts.html','차트'),link('chart-compare.html','차트비교'),link('screener.html','진입필터'));
  group('references','참고자료',[['etfs.html','ETF 도우미'],['reports.html','리포트']]);nav.append(link('credit.html','신용잔고'));
  group('journals','매매일지',[['club.html','정버핏모임'],['community.html','나의 반성일기'],['journals.html','당신들의 반성일기']]);
  const account=document.createElement('a');account.href=config.privateJournalUrl;account.textContent='계좌 매매일지 🔒';account.dataset.private='';account.hidden=true;nav.append(account);

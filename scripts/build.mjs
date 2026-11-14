@@ -7,7 +7,7 @@ if(key.startsWith('sb_secret_'))throw Error('A server secret must never be place
 if(key.startsWith('eyJ')){const claims=JSON.parse(Buffer.from(key.split('.')[1],'base64url').toString());if(claims.role!=='anon')throw Error('Only an anon/publishable key may be shipped.');}
 await mkdir('dist',{recursive:true});
 await build({entryPoints:['app.js'],bundle:true,outfile:'dist/app.js',format:'esm',target:['es2022'],minify:true,legalComments:'eof'});
-for(const file of ['chart-news.css','screener.html','screener.css','chart-workspace.css','chart-guide.css','flow-overview.css','club.html','club.css','index.html','etfs.html','etfs.css','reports.html','community.html','journals.html','journals.css','credit.html','credit.css','charts.html','quotes-charts.css','chart-analysis.css','sentiment.css','styles.css','site-pages.css','site.config.json','.nojekyll'])await copyFile(file,'dist/'+file);
+for(const file of ['chart-compare.html','chart-compare.css','chart-news.css','screener.html','screener.css','chart-workspace.css','chart-guide.css','flow-overview.css','club.html','club.css','index.html','etfs.html','etfs.css','reports.html','community.html','journals.html','journals.css','credit.html','credit.css','charts.html','quotes-charts.css','chart-analysis.css','sentiment.css','styles.css','site-pages.css','site.config.json','.nojekyll'])await copyFile(file,'dist/'+file);
 await mkdir('dist/data',{recursive:true});
 const research=JSON.parse(await readFile('data/research.json','utf8'));
 if(research.schemaVersion!==1||!['targets','earnings','overseas'].every(key=>Array.isArray(research[key]?.items)))throw Error('Invalid research data');

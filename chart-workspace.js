@@ -1,6 +1,7 @@
 import{WATCH_KEY,watchItem,watchKey,mergeWatchlist,parseWatchlist}from'./watchlist-core.mjs';
 const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;return n;},button=(text,run)=>{const b=node('button',text);b.type='button';b.onclick=run;return b;};
-export function initChartWorkspace({select}){
+export function initChartWorkspace({select,embedded=false}){
+ if(embedded)return initEmbeddedWorkspace();
  const main=document.querySelector('main'),form=document.getElementById('chart-search-form'),chart=document.querySelector('.stock-chart-panel'),intro=document.querySelector('.page-intro');intro?.remove();
  const workspace=node('div',null,'chart-workspace');workspace.id='chart-workspace';main.insertBefore(workspace,form);const sidebar=node('aside',null,'chart-sidebar');workspace.append(sidebar,chart);chart.classList.add('chart-center');
  const panels=new Map(),dock=node('div',null,'chart-mobile-dock'),backdrop=node('div',null,'chart-sheet-backdrop'),media=matchMedia('(max-width:1099px)');let opened=null,previousFocus=null,dragY=null;backdrop.hidden=true;backdrop.onclick=()=>close();
@@ -32,4 +33,12 @@ export function initChartWorkspace({select}){
  document.addEventListener('keydown',e=>{if(!opened)return;if(e.key==='Escape'){e.preventDefault();close();}if(e.key==='Tab'){const focus=[...opened.querySelectorAll('button,input,select,summary,a[href]')].filter(n=>!n.disabled&&n.getClientRects().length),first=focus[0],last=focus.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}});const placeSearch=()=>{close();if(media.matches)main.insertBefore(form,workspace);else watch.insertBefore(form,storageNote);};media.addEventListener('change',placeSearch);placeSearch();document.body.append(backdrop,dock);render();
  window.addEventListener('storage',e=>{if(e.key!==WATCH_KEY)return;try{items=e.newValue?parseWatchlist(e.newValue):[];render();status.textContent='다른 탭의 관심종목 변경을 반영했습니다.';}catch{}});
  return {setCurrent,clear(){dashboard.replaceChildren();notes.replaceChildren();display.replaceChildren();navigation.replaceChildren();document.querySelector('.chart-controls>.guide-controls')?.remove();},dashboardHost:dashboard,notesHost:notes,settingsHost:display,navigationHost:navigation,open};
+}
+function initEmbeddedWorkspace(){
+ document.body.classList.add('chart-embedded');document.querySelector('header')?.remove();document.querySelector('footer')?.remove();document.querySelector('.page-intro')?.remove();document.querySelector('.chart-analysis-section')?.remove();
+ const controls=document.querySelector('.chart-controls'),settings=document.createElement('details'),summary=document.createElement('summary'),display=document.createElement('div'),navigation=document.createElement('div'),dashboard=document.createElement('div'),notes=document.createElement('div');
+ settings.className='chart-embedded-settings';summary.textContent='표시 설정';settings.append(summary,display);controls.after(settings);navigation.className='chart-embedded-navigation';document.getElementById('stock-chart').after(navigation);
+ const period=document.createElement('select');period.id='chart-range-select';period.setAttribute('aria-label','차트 표시 기간');for(const[value,label]of[['1mo','1개월'],['3mo','3개월'],['6mo','6개월'],['1y','1년'],['2y','2년']]){const o=document.createElement('option');o.value=value;o.textContent=label;period.append(o);}period.value='6mo';period.onchange=()=>document.querySelector('[data-chart-range="'+period.value+'"]').click();controls.append(period);
+ document.getElementById('chart-market').value=new URLSearchParams(location.search).get('market')||'KR';
+ return{setCurrent(){},clear(){dashboard.replaceChildren();notes.replaceChildren();display.replaceChildren();navigation.replaceChildren();controls.querySelector('.guide-controls')?.remove();},dashboardHost:dashboard,notesHost:notes,settingsHost:display,navigationHost:navigation};
 }
