@@ -1,7 +1,8 @@
 import{newsDateForBar}from'./stock-news-core.mjs';
 import{reboundCandidate}from'./rebound-candidate-core.mjs';
 import{entryTrigger,ENTRY_KEYS}from'./entry-types.mjs';
-import{formatPrice,formatTarget,formatPriceReason,displayPrice}from'./price-display.mjs';
+import{formatPrice,formatTarget,formatPriceReason,displayPrice,priceDistancePct}from'./price-display.mjs';
+import{chartPriceSummary}from'./chart-price.mjs';
 import{viewWindow,setWindow,zoomWindow,scalePrice,chartPaneLayout,volumeFractionAt,chartHorizontalLayout}from'./chart-viewport.mjs';
 import{GUIDE_LINES}from'./chart-guide-core.mjs';
 import{STRATEGY_RULES}from'./strategy-core.mjs';
@@ -67,16 +68,18 @@ export function guideView(data,options={}){
    const state=signal.status==='closed'?(signal.exitProvisional?'종료 신호 잠정':'종료된 신호'):signal.status==='active'?(signal.provisional?'잠정 진입 · 진행 봉':'진입 후 추적 중'):'추적 상태 미확인';
    if(signal.entryType==='oversoldBounce')signalCard.append(el('p','단기 역추세 실험 신호 · 하락 추세가 이어질 수 있습니다. 저점 기준 손절과 8봉 추적 기한을 함께 확인하세요.','guide-notice'));
    signalCard.append(el('span',state,'guide-entry-state'));const cells=el('div',null,'guide-entry-grid');
+   const quote=chartPriceSummary(data),useQuote=view.follow&&quote?.source==='quote'&&Number.isFinite(Date.parse(quote.priceDate))&&Date.parse(quote.priceDate)>=Date.parse(signal.referenceAt),referencePrice=useQuote?quote.price:signal.referencePrice,referenceAt=useQuote?quote.priceDate:signal.referenceAt;
    for(const[key,label,value,note]of[
     ['date',signal.entryLabel+' 신호',when(signal.asOf,frame),frame.timeframe==='4h'?'4시간봉 · 현지 시간':'일봉'],
-    ['price','신호 기준 진입가',price(signal.entry)+' '+data.currency,signal.provisional?'진행 봉 가격 · 마감 전 변경 가능':'신호 발생 봉의 종가'],
-    ['reference',view.follow?'비교 가격':'표시 마지막 봉 가격',price(signal.referencePrice)+' '+data.currency,when(signal.referenceAt,frame)],
-    ['tp1','신호 TP1',target(signal.tp1)+' '+data.currency,signal.tp1Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 1.5R'],
-    ['tp2','신호 TP2',target(signal.tp2)+' '+data.currency,signal.tp2Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 2.5R'],
-    ['stop','신호 초기 손절',price(signal.initialStop)+' '+data.currency,signal.entryType==='oversoldBounce'?'과매도 구간 저점−0.2ATR':'신호 당시 변동성 위험 예산'],
-    ['change','진입가 대비 등락',(signal.changePct>0?'+':'')+num(signal.changePct,2)+'%','실제 매매 수익률 아님']
-   ]){const cell=el('div');cell.dataset.entryValue=key;const valueNode=el('strong',value);if(key==='change')valueNode.className=signal.changePct>0?'guide-up':signal.changePct<0?'guide-down':'';cell.append(el('small',label),valueNode,el('small',note));cells.append(cell);}signalCard.append(cells);
-   signalCard.append(el('p',(signal.exitAt?'종료 신호: '+when(signal.exitAt,frame)+' · 이후 가격과도 비교하므로 보유 수익률을 뜻하지 않습니다. ':'')+'신호 진입가는 당시 봉 가격이며 실제 매수가가 아닙니다. 신호 조건과 현재 상태를 아래에서 확인하세요.','guide-note'));
+    ['price','신호 기준 진입가',signal.entry,signal.provisional?'진행 봉 가격 · 마감 전 변경 가능':'신호 발생 봉의 종가'],
+    ['tp1','TP1',signal.tp1,signal.tp1Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 1.5R'],
+    ['tp2','TP2',signal.tp2,signal.tp2Hit?'신호 이후 고가 도달 확인':'신호 당시 고정 · 2.5R'],
+    ['stop','손절가',signal.initialStop,signal.entryType==='oversoldBounce'?'신호 초기 손절 · 과매도 구간 저점−0.2ATR':'신호 초기 손절 · 변동성 위험 예산'],
+    ['reference',view.follow?'현재가':'표시 마지막 봉 가격',referencePrice,(useQuote?new Date(referenceAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' KST'+(quote.stale?' · 이전 조회 자료':''):when(referenceAt,frame))]
+   ]){const cell=el('div');cell.dataset.entryValue=key;const line=el('div',null,'guide-entry-value'),valueNode=el('strong',key==='date'?value:price(value)+' '+data.currency);line.append(valueNode);
+    if(key!=='date'){const pct=priceDistancePct(value,signal.entry,data.currency);if(pct!=null){const label=key==='reference'?'진입가 대비 등락률':key==='stop'&&pct<0?'진입가 대비 예상 손실률':['tp1','tp2'].includes(key)&&pct>=0?'진입가 대비 예상 수익률':'진입가 대비 이격률',text=(pct>0?'+':'')+num(pct,2)+'%',change=el('span','('+text+')','guide-entry-percent '+(pct>0?'guide-up':pct<0?'guide-down':''));change.dataset.entryPercent=key;change.title=label+' '+text;change.setAttribute('aria-label',label+' '+text);line.append(change);}}
+    cell.append(el('small',label),line,el('small',note));cells.append(cell);}signalCard.append(cells);
+   signalCard.append(el('p','괄호는 신호 진입가 대비 등락률(비용 제외)입니다. 실제 체결가·실현 수익률이 아닙니다.'+(signal.exitAt?' 종료 '+when(signal.exitAt,frame)+' 이후 가격도 비교합니다.':''),'guide-note'));
   }else signalCard.append(el('p','이 시점까지 수신된 이력에는 진입 신호가 없습니다.','guide-note'));content.append(signalCard);
   const explanation=el('div',null,'guide-explanation'),recent=signal?guide.events.find(e=>signal.status==='closed'?e.asOf===signal.exitAt&&['exit','patternExit'].includes(e.key)&&(signal.patternType?e.patternType===signal.patternType:!e.patternType):e.asOf===signal.asOf&&e.key===signal.kind):null;
   explanation.append(el('h3',['exit','patternExit'].includes(recent?.key)?'이탈 이유':signal?.status==='active'?'진입 신호 이유':'진입 대기 이유'));
