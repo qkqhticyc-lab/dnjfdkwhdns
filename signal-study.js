@@ -95,7 +95,7 @@ export function initSignalStudy() {
         byId('study-from').value = [data.fromMonth, from.toISOString().slice(0, 7)].sort().at(-1);
       }
       const age = Date.now() - Date.parse(data.collectedAt);
-      byId('study-status').textContent = `${data.evaluatedCount.toLocaleString()} / ${data.universeCount.toLocaleString()}종목 검증 · ${data.failedCount.toLocaleString()}종목 자료 부족·조회 실패 · 수집 ${new Date(data.collectedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })} KST${age > 30 * 3600000 ? ' · 갱신 지연' : ''}`;
+      byId('study-status').textContent = `${data.evaluatedCount.toLocaleString()} / ${data.universeCount.toLocaleString()}종목 분석 · ${data.failedCount.toLocaleString()}종목 자료 부족·조회 실패 · 검증 특수종목 제외 ${(data.excludedCount || 0).toLocaleString()}종목 · 수집 ${new Date(data.collectedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })} KST${age > 30 * 3600000 ? ' · 갱신 지연' : ''}`;
       byId('study-results').hidden = false;
       draw();
     } catch {

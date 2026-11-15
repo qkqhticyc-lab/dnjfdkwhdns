@@ -1,5 +1,6 @@
 import { emptyStudyGroup, mergeStudyGroup, STUDY_VERSION } from './signal-study-core.mjs';
 import { eventShard } from './signal-events.mjs';
+import { excludedStock } from './screener-core.mjs';
 
 export const ALERT_SHARDS = 32;
 
@@ -8,13 +9,14 @@ export function buildSignalTools(scan, sectors) {
   const classified = new Map((sectors?.items || []).map(item => [item.key, item.id]));
   const groups = new Map();
   const shards = Array.from({ length: ALERT_SHARDS }, () => ({ schemaVersion: 1, collectedAt: scan.collectedAt, stocks: {} }));
-  let evaluated = 0;
+  let evaluated = 0, excluded = 0;
   for (const item of scan.items) {
     if (item.status !== 'ok' || item.signalToolsVersion !== 1 || !Array.isArray(item.studies) || !Array.isArray(item.alertHistory)) continue;
     evaluated++;
     const key = item.market + ':' + item.symbol;
     const sector = classified.get(key) || 'unknown';
-    for (const study of item.studies) {
+    if (excludedStock(item)) excluded++;
+    for (const study of excludedStock(item) ? [] : item.studies) {
       const id = [item.market, sector, study.month, study.type, study.trend, study.regime].join('|');
       if (!groups.has(id)) groups.set(id, { market: item.market, sector, ...emptyStudyGroup(study.month, study.type, study.trend, study.regime) });
       mergeStudyGroup(groups.get(id), study);
@@ -31,6 +33,7 @@ export function buildSignalTools(scan, sectors) {
   const manifest = {
     schemaVersion: 1, studyVersion: STUDY_VERSION, status: 'ok', collectedAt: scan.collectedAt,
     universeCount: scan.items.length, evaluatedCount: evaluated, failedCount: scan.items.length - evaluated,
+    excludedCount: excluded,
     signalCount: rows.reduce((sum, group) => sum + group.signals, 0),
     fromMonth: rows[0]?.month || null, toMonth: rows.at(-1)?.month || null,
     notificationShards: ALERT_SHARDS,

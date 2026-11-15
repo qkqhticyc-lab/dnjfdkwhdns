@@ -109,6 +109,11 @@ test('publisher aggregates sectors without publishing per-symbol historical rows
   assert.equal(output.manifest.signalCount, 1);
   assert.equal(output.shards.length, 32);
   assert.equal(output.study.groups[0].symbol, undefined);
+  const special = buildSignalTools({ signalToolsVersion: 1, collectedAt: '2026-11-15T09:00:00Z',
+    items: [item, { ...item, symbol: '123456', name: '테스트스팩' }] }, null);
+  assert.equal(special.manifest.excludedCount, 1);
+  assert.equal(special.manifest.signalCount, 1);
+  assert.ok(special.shards.some(shard => shard.stocks['KR:123456']));
 });
 
 test('notification registration starts now, deduplicates signals, and read receipts never regress across tabs', () => {

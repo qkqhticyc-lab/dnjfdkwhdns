@@ -49,7 +49,7 @@ export function initNotifications() {
     field.append(input, document.createTextNode(label)); settings.append(field); settingsInputs.set(kind, input);
     input.onchange = () => { state.settings[kind] = input.checked; state.settingsAt = Date.now(); persist(); render(); refresh(); };
   }
-  const note = node('p', '관심종목·알림·읽음 상태는 이 브라우저에 저장합니다. 일봉 확정 신호는 하루 2회 전체 검사로 확인하며, 페이지를 여는 동안 2분마다 새 배포를 조회합니다. 최근 30일 최대 200건을 보관합니다.', 'notification-note');
+  const note = node('p', '관심종목·알림·읽음 상태는 이 브라우저에 저장합니다. 추적 시작 이후의 일봉 확정 신호를 하루 2회 전체 검사로 확인하며, 페이지를 여는 동안 2분마다 새 배포를 조회합니다. 실적 일정은 제공처 등록 기준입니다. 최근 30일 최대 200건을 보관합니다.', 'notification-note');
   const link = node('a', '관심종목 관리 →'); link.href = './charts.html'; link.className = 'notification-watch-link';
   panel.append(heading, toolbar, status, list, more, settings, note, link); document.body.append(panel);
 
