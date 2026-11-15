@@ -20,6 +20,16 @@ try {
  const live = await request(SITE+'data/earnings.json');
  if (validEarnings(live) && (!validEarnings(previous) || live.attemptedAt>previous.attemptedAt)) previous=live;
 } catch {}
+// Retain the verified expanded snapshot when a new deployment has an older cache.
+const seed=await read('data/us-earnings.json',null);
+if(validEarnings(seed)) {
+ const known=new Map((previous?.items||[]).filter(item=>item.market==='US').map(item=>[item.symbol,item]));
+ for(const item of seed.items.filter(item=>item.market==='US')) {
+  const old=known.get(item.symbol);
+  if(!old||item.period>old.period||(item.period===old.period&&item.earningsFetchedAt>old.earningsFetchedAt))known.set(item.symbol,item);
+ }
+ previous={...(previous||seed),items:[...(previous?.items||[]).filter(item=>item.market!=='US'),...known.values()]};
+}
 const previousAll=previous;
 previous=validEarnings(previousAll)?{...previousAll,...previousAll.markets?.KR,items:previousAll.items.filter(item=>(item.market||'KR')==='KR')}:null;
 let screen=await read('data/screener.json',{});

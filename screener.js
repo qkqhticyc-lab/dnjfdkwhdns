@@ -61,8 +61,12 @@ export async function initScreener(){let data,sectorData,shown=50,liquidity='sta
    options.className = 'screen-entry-options';
    const main = el('div');
    main.className = 'screen-entry-row';
+   main.setAttribute('role','group');
+   main.setAttribute('aria-label','추세·패턴 검색 유형');
    rebound = el('div');
    rebound.className = 'screen-entry-row screen-rebound-row';
+   rebound.setAttribute('role','group');
+   rebound.setAttribute('aria-label','반등 검색 유형');
    options.append(main, rebound);
    group.append(options);
    options = main;

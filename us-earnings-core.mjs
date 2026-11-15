@@ -9,12 +9,76 @@ export const US_EARNINGS_STOCKS = [
  ['JPM','JP모건'],['V','비자'],['MA','마스터카드'],['WMT','월마트'],['COST','코스트코'],['XOM','엑슨모빌'],['LLY','일라이릴리'],['UNH','유나이티드헬스']
 ].map(([symbol,name])=>({symbol,name}));
 
+export const US_EARNINGS_LIMIT=200;
+
+export function selectUsEarningsStocks(charts,previous=[],limit=US_EARNINGS_LIMIT) {
+ const selected=new Map(US_EARNINGS_STOCKS.map(stock=>[stock.symbol,stock]));
+ const liquid=charts.filter(row=>row.market==='US'&&row.status==='ok'&&/^[A-Z]{1,5}$/.test(row.symbol)&&row.liquidity?.activeDays>=15&&row.liquidity?.average>=2e7&&!/스팩|SPAC/i.test(row.name))
+  .sort((a,b)=>b.liquidity.average-a.liquidity.average||a.symbol.localeCompare(b.symbol));
+ const fallback=previous.filter(row=>row.market==='US'&&/^[A-Z][A-Z0-9.-]{0,9}$/.test(row.symbol));
+ for(const row of [...liquid,...fallback]) {
+  if(selected.size>=limit)break;
+  if(!selected.has(row.symbol))selected.set(row.symbol,{symbol:row.symbol,name:row.name});
+ }
+ return [...selected.values()].slice(0,limit);
+}
+
 export function usEarningsNumber(value) {
  if (typeof value==='number') return earningsNumber(value);
- const text=String(value??'').trim().replace(/^\$/, '').replaceAll(',','');
+ const text=String(value??'').trim().replace(/^\(\$/, '(').replace(/^\$/, '').replaceAll(',','');
  const normalized=/^\([\d.]+\)$/.test(text)?'-'+text.slice(1,-1):text;
  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(normalized)) return null;
  return earningsNumber(Number(normalized));
+}
+
+function fiscalMonth(value) {
+ const match=/^([A-Za-z]{3})[ /](20\d{2})$/.exec(value||'');
+ const month=match?['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(match[1])+1:0;
+ return month?match[2]+'-'+String(month).padStart(2,'0'):null;
+}
+
+function quarterNumber(period,yearEnd) {
+ if(!yearEnd)return {};
+ const months=(Number(yearEnd.slice(0,4))-Number(period.slice(0,4)))*12+Number(yearEnd.slice(5))-Number(period.slice(5));
+ return [0,3,6,9].includes(months)?{fiscalYear:Number(yearEnd.slice(0,4)),fiscalQuarter:4-months/3}:{};
+}
+
+export function parseUsUpcoming(dateData,forecastData,symbol,latestPeriod,now=Date.now()) {
+ const dateValid=dateData?.status?.rCode===200&&dateData.data?.heading===symbol+' Earnings Date';
+ const text=dateValid?String(dateData.data.reportText||''):'';
+ const dateMatch=/report earnings on\s+(\d{1,2})\/(\d{1,2})\/(20\d{2})/i.exec(text);
+ const date=dateMatch?dateMatch[3]+'-'+dateMatch[1].padStart(2,'0')+'-'+dateMatch[2].padStart(2,'0'):null;
+ let datePeriod=fiscalMonth(/fiscal Quarter ending\s+([A-Za-z]{3} 20\d{2})/i.exec(text)?.[1]);
+ const forecastValid=forecastData?.status?.rCode===200&&String(forecastData.data?.symbol).toUpperCase()===symbol;
+ const future=(forecastValid?forecastData.data.quarterlyForecast?.rows||[]:[]).map(row=>({...row,period:fiscalMonth(row.fiscalEnd)}))
+  .filter(row=>row.period&&row.period>latestPeriod).sort((a,b)=>a.period.localeCompare(b.period));
+ const dateEpsMatch=/consensus EPS forecast for the quarter is\s+(\(?\$?[+-]?(?:\d+(?:\.\d+)?|\.\d+)\)?)/i.exec(text);
+ const dateEps=usEarningsNumber(dateEpsMatch?.[1]);
+ const epsMatches=future.filter(row=>dateEps!==null&&usEarningsNumber(row.consensusEPSForecast)===dateEps);
+ // Some estimated-date notices omit the quarter. Join only when their EPS matches the unique next forecast.
+ if(!datePeriod&&epsMatches.length===1&&epsMatches[0]===future[0]&&future[0].period<=String(date).slice(0,7))datePeriod=future[0].period;
+ const period=datePeriod>latestPeriod?datePeriod:future[0]?.period;
+ if(!period)return null;
+ const matches=future.filter(row=>row.period===period),forecast=matches.length===1?matches[0]:null;
+ const hasDate=datePeriod===period&&validNewsDate(date);
+ const yearEnd=(forecastValid?forecastData.data.yearlyForecast?.rows||[]:[]).map(row=>fiscalMonth(row.fiscalEnd)).filter(value=>value&&value>=period).sort()[0];
+ const count=Number(forecast?.noOfEstimates??(hasDate?/based on\s+(\d+) analysts/i.exec(text)?.[1]:null));
+ const eps=usEarningsNumber(forecast?.consensusEPSForecast);
+ return {
+  period,...quarterNumber(period,yearEnd),announcedOn:hasDate?date:null,dateBasis:'provider-estimate',
+  time:hasDate?(/after market close/i.test(text)?'after-hours':/before market open/i.test(text)?'pre-market':'unknown'):'unknown',
+  epsForecast:eps??(hasDate?dateEps:null),
+  epsLow:usEarningsNumber(forecast?.lowEPSForecast),epsHigh:usEarningsNumber(forecast?.highEPSForecast),analysts:Number.isInteger(count)&&count>0?count:null,
+  fetchedAt:new Date(now).toISOString(),status:hasDate&&eps!==null?'ok':'partial',
+  sourceUrl:'https://www.nasdaq.com/market-activity/stocks/'+symbol.toLowerCase()+'/earnings'
+ };
+}
+
+export function upcomingEarningsState(item,now=Date.now()) {
+ const pending=item.market==='US'&&item.upcoming?.period>item.period?item.upcoming:null;
+ if(!pending)return null;
+ const date=pending.announcedOn,today=newsDay(now,'US');
+ return {pending,label:date&&date<today?'발표 확인 대기':'발표 전',stale:pending.status==='stale'||!!item.stale};
 }
 
 export function parseUsEps(data, symbol, now=Date.now()) {

@@ -1,5 +1,5 @@
 import {rankScreenItem} from './screener-rank.mjs';
-import {validNewsDate, zonedTime} from './stock-news-core.mjs';
+import {validNewsDate, zonedTime, newsDay} from './stock-news-core.mjs';
 
 export const EARNINGS_THRESHOLD = 5;
 export const EARNINGS_METRICS = [
@@ -139,6 +139,8 @@ export function earningsVerdict(item) {
 export function earningsDecision(item, now=Date.now()) {
  if (item.stale) return {kind:'unavailable',label:'실적 자료 갱신 대기',reasons:['마지막 확인 자료를 표시하고 있습니다. 새 자료를 확인한 뒤 매수 조건을 비교합니다.']};
  if (item.market==='US') {
+  const pending=item.upcoming;
+  if(pending?.period>item.period&&validNewsDate(pending.announcedOn)&&pending.announcedOn<=newsDay(now+7*86400000,'US')) return {kind:'wait',label:pending.announcedOn<newsDay(now,'US')?'새 실적 확인 대기':'실적 발표 전 · 진입 대기',reasons:['예정 분기의 발표 실적을 확인한 뒤 실적·차트 조건을 다시 비교합니다.']};
   if (item.financialStatus!=='ok' || item.financialStale) return {kind:'unavailable',label:'재무실적 확인 대기',reasons:['EPS와 같은 결산분기의 매출·순이익 자료를 확인합니다.']};
   const eps=item.metrics?.eps;
   if (!(eps?.actual>0 && surprise(eps.actual,eps.forecast).percent>=EARNINGS_THRESHOLD && item.metrics?.net?.actual>0 && Number.isFinite(item.revenueGrowthYoY) && item.revenueGrowthYoY>=0)) return {kind:'wait',label:'실적 개선 관찰',reasons:['Nasdaq 비교 EPS 5% 이상 상회·흑자, 순이익 흑자와 전년 동기 대비 매출 증가를 함께 확인합니다.']};
@@ -174,9 +176,13 @@ function earningsChartDecision(item,now,quality) {
 export function validEarnings(data) {
  const validMetrics = metrics => metrics && [...EARNINGS_METRICS,{key:'eps'}].every(({key})=>!metrics[key]||[metrics[key].actual,metrics[key].forecast].every(value=>value===null||Number.isFinite(value)));
  const validPeriod=(period,us)=> (us?/^20\d{2}-(0[1-9]|1[0-2])$/:/^20\d{2}\/[1-4]$/).test(period);
+ const validUpcoming=item=>!item.upcoming||(item.market==='US'&&validPeriod(item.upcoming.period,true)&&item.upcoming.period>item.period&&
+  (item.upcoming.announcedOn===null||validNewsDate(item.upcoming.announcedOn))&&['ok','partial','stale'].includes(item.upcoming.status)&&Number.isFinite(Date.parse(item.upcoming.fetchedAt))&&
+  ['epsForecast','epsLow','epsHigh','analysts'].every(key=>item.upcoming[key]===null||Number.isFinite(item.upcoming[key]))&&
+  (item.upcoming.fiscalQuarter===undefined||([1,2,3,4].includes(item.upcoming.fiscalQuarter)&&Number.isInteger(item.upcoming.fiscalYear))));
  return data?.schemaVersion===1 && ['ok','partial','stale','unavailable'].includes(data.status) && Array.isArray(data.items) && data.items.every(item=>
   [undefined,'KR','US'].includes(item.market) && (item.market==='US'?/^[A-Z][A-Z0-9.-]{0,9}$/:/^[A-Z0-9]{6}$/).test(item.symbol) && validPeriod(item.period,item.market==='US') && typeof item.name==='string' && item.name.length>0 && item.name.length<=120 &&
-  (item.market==='US'?item.basis==='reported'&&item.currency==='USD'&&[null,'USD','EUR','TWD','JPY','GBP','CAD','CHF'].includes(item.financialCurrency)&&Number.isFinite(item.metrics?.eps?.actual):['consolidated','separate'].includes(item.basis)) && validNewsDate(item.announcedOn) && validMetrics(item.metrics) &&
+  (item.market==='US'?item.basis==='reported'&&item.currency==='USD'&&[null,'USD','EUR','TWD','JPY','GBP','CAD','CHF'].includes(item.financialCurrency)&&Number.isFinite(item.metrics?.eps?.actual):['consolidated','separate'].includes(item.basis)) && validNewsDate(item.announcedOn) && validMetrics(item.metrics) && validUpcoming(item) &&
   Array.isArray(item.history||[]) && (item.history||[]).every(point=>validPeriod(point.period,item.market==='US')&&point.basis===item.basis&&validMetrics(point.metrics))
  );
 }
