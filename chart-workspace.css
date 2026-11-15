@@ -77,3 +77,4 @@ body.chart-embedded .chart-search-dialog #chart-query{padding:13px 14px;font-siz
 body.chart-embedded #chart-refresh{margin-left:auto;width:32px;height:32px;padding:0;font-size:25px;line-height:1}
 .chart-embedded-settings [aria-label="차트 표현"]{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .chart-embedded-settings [aria-label="차트 표현"] button{font-size:11px;padding:6px 9px}
+.chart-workspace-panel [data-chart-mode][aria-pressed=true],.chart-embedded-settings [data-chart-mode][aria-pressed=true]{background:#257562;color:white;border-color:#257562}
