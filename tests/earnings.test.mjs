@@ -67,6 +67,7 @@ test('buy review requires earnings quality, post-announcement entry, fresh data,
  for(const change of [
   item=>{item.stale=true;},item=>{item.chart.asOf='2026-11-01';},item=>{item.chart.symbol='999999';},
   item=>{item.chart.asOf='2026-11-16';},item=>{item.chart.signal.asOf='2026-11-01';},item=>{item.chart.signal.provisional=true;},
+  item=>{item.chart.signal.asOf=item.announcedOn;},
   item=>{item.chart.signal.entryType='oversoldBounce';},item=>{item.chart.signal.status='closed';},item=>{item.chart.signal.age=6;},
   item=>{item.chart.price=109;},item=>{item.chart.signal.initialStop=80;},item=>{item.chart.rankInputs.mediumAligned=false;},
   item=>{item.chart.liquidity.average=1e9;},item=>{item.name='테스트스팩';},item=>{item.metrics.net.forecast=null;},item=>{item.metrics.revenue.actual=99;}

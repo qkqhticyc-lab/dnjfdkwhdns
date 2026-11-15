@@ -146,7 +146,7 @@ export function earningsDecision(item, now=Date.now()) {
  const chart = item.chart, signal = chart?.signal;
  const fresh = chart?.asOf && now-Date.parse(chart.asOf+'T15:30:00+09:00')<=5*86400000 && Date.parse(chart.asOf+'T15:30:00+09:00')<=now;
  if (!fresh || chart?.status!=='ok' || chart.market!=='KR' || chart.symbol!==item.symbol || chart.asOf<item.announcedOn) return {kind:'unavailable',label:'최신 차트 확인 대기',reasons:['최근 마감봉 자료를 확인한 뒤 매수 조건을 비교합니다.']};
- if (signal?.status!=='active' || signal.provisional || !['breakout','pullback','triangle','boxRetest'].includes(signal.entryType) || signal.asOf<item.announcedOn || !Number.isFinite(signal.age) || signal.age>5) return {kind:'wait',label:'실적 양호 · 진입 대기',reasons:['실적 발표 이후 최근 5봉의 돌파·눌림·패턴 진입 신호를 기다립니다.']};
+ if (signal?.status!=='active' || signal.provisional || !['breakout','pullback','triangle','boxRetest'].includes(signal.entryType) || signal.asOf<=item.announcedOn || !Number.isFinite(signal.age) || signal.age>5) return {kind:'wait',label:'실적 양호 · 진입 대기',reasons:['발표 다음 거래일부터 발생한 최근 5봉의 돌파·눌림·패턴 진입 신호를 기다립니다.']};
  const rank = rankScreenItem(chart), price = chart.price;
  const risk = price-signal.initialStop, reward = signal.tp1-price;
  const riskPercent = risk/price*100, rewardRisk = risk>0?reward/risk:null;
