@@ -59,7 +59,7 @@ export function initSignalStudy() {
     if (!data) return;
     const groups = selectedGroups(), costIndex = +byId('study-cost').value;
     const summary = studySummary(groups, costIndex);
-    byId('study-summary').textContent = `신호 ${summary.signals.toLocaleString()}건 · 다음 봉 진입 제외 ${summary.gapSkipped.toLocaleString()}건 · 다음 봉 미도래 ${summary.missingNext.toLocaleString()}건`;
+    byId('study-summary').textContent = `신호 ${summary.signals.toLocaleString()}건 · 다음 봉 진입 제외 ${summary.gapSkipped.toLocaleString()}건 · 다음 봉 미제공 ${summary.missingNext.toLocaleString()}건`;
     const horizonRows = byId('study-horizons'); horizonRows.replaceChildren();
     for (const result of summary.results) {
       const row = node('tr');

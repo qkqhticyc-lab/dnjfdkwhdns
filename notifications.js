@@ -61,7 +61,7 @@ export function initNotifications() {
 
   function render() {
     const unread = state.items.filter(item => !item.readAt).length;
-    badge.textContent = unread > 99 ? '99+' : String(unread); badge.hidden = unread === 0;
+    badge.textContent = String(unread); badge.hidden = unread === 0;
     bell.setAttribute('aria-label', unread ? `알림 · 읽지 않은 알림 ${unread}개` : '알림');
     for (const [kind, input] of settingsInputs) input.checked = state.settings[kind];
     const items = state.items.filter(item => !unreadOnly.checked || !item.readAt);
@@ -122,6 +122,7 @@ export function initNotifications() {
     busy = true; const version = generation;
     try {
       if (watchlist.length) {
+       try {
         const manifest = await json('./data/signal-tools.json');
         if (!validSignalManifest(manifest) || manifest.status !== 'ok') throw Error('Signal scan pending');
         if (latestSource && manifest.collectedAt < latestSource) throw Error('Older alert source');
@@ -138,6 +139,9 @@ export function initNotifications() {
         state = addSignalNotifications(state, stocks); latestSource = manifest.collectedAt;
         const late = Date.now() - Date.parse(latestSource) > 30 * 3600000;
         status.textContent = `신호 수집 ${new Date(latestSource).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })} KST${late ? ' · 갱신 지연' : ''}`;
+       } catch {
+        status.textContent = '신호 알림 조회 지연 · 저장된 알림과 확인 가능한 일정을 표시합니다.';
+       }
       } else status.textContent = '관심종목을 추가하면 새 마감봉 신호를 확인합니다.';
       const calendars = await Promise.allSettled([
         state.settings.earnings && watchlist.length ? json('./data/alert-calendar.json') : Promise.resolve(null),
