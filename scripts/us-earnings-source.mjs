@@ -35,7 +35,7 @@ export async function collectUsEarnings({previous,charts,cache,request,now}) {
    const provider=chart?.providerSymbol;
    let saved=cache[stock.symbol]?.provider===provider?cache[stock.symbol]:null;
    const priorNext=saved?.next||(old?.upcoming?{version:1,latestPeriod:old.period,fetchedAt:old.upcoming.fetchedAt,upcoming:old.upcoming,status:old.upcoming.status==='ok'?'ok':'partial'}:null);
-   const nextFresh=priorNext?.version===1&&now-Date.parse(priorNext.fetchedAt)<6*3600000&&priorNext.latestPeriod===epsRows[0].period&&(!priorNext.upcoming?.announcedOn||priorNext.upcoming.announcedOn>newsDay(now+86400000,'US'));
+   const nextFresh=priorNext?.version===1&&priorNext.upcoming&&priorNext.upcoming.status!=='stale'&&now-Date.parse(priorNext.fetchedAt)<6*3600000&&priorNext.latestPeriod===epsRows[0].period&&(!priorNext.upcoming.announcedOn||priorNext.upcoming.announcedOn>newsDay(now+86400000,'US'));
    const nextPromise=nextFresh?Promise.resolve(priorNext):Promise.allSettled([
     sourceRequest('https://api.nasdaq.com/api/analyst/'+stock.symbol+'/earnings-date'),
     sourceRequest('https://api.nasdaq.com/api/analyst/'+stock.symbol+'/earnings-forecast')

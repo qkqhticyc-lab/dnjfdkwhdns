@@ -150,3 +150,17 @@ test('access denial stops further provider calls and persists a retry interval',
  assert.ok(calls>0&&calls<=6);assert.equal(cache._nasdaqRetryAfter,now+3600000);
  calls=0;await collectUsEarnings({previous:null,charts:[],cache,request,now:now+1000});assert.equal(calls,0);
 });
+
+test('failed schedule attempts do not postpone recovery for the full six-hour successful-data cache',async()=>{
+ const pending={...parseUsUpcoming(nextDate(),forecast(),'NVDA','2026-07',now),status:'stale',announcedOn:'2026-11-25',fetchedAt:new Date(now-3600000).toISOString()};
+ const old={...item(),symbol:'NVDA',upcoming:pending};
+ const cache={NVDA:{provider:'NVDA.O',next:{version:1,latestPeriod:old.period,fetchedAt:new Date(now).toISOString(),status:'partial',upcoming:pending}},_nasdaqRetryAfter:now-1};
+ let dates=0;
+ const result=await collectUsEarnings({previous:{items:[old]},charts:[{market:'US',symbol:'NVDA',providerSymbol:'NVDA.O'}],cache,now,request:async url=>{
+  if(url.includes('/NVDA/earnings-date')){dates++;return nextDate();}
+  if(url.includes('/NVDA/earnings-forecast'))return forecast();
+  if(url.includes('/earnings-surprise'))return rawEps(url.split('/company/')[1].split('/')[0]);
+  throw Error('offline');
+ }});
+ assert.equal(dates,1);const next=result.items.find(x=>x.symbol==='NVDA').upcoming;assert.equal(next.status,'ok');assert.equal(next.announcedOn,'2026-11-17');
+});
