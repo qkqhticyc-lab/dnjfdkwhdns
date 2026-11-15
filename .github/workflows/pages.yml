@@ -65,6 +65,13 @@ jobs:
           restore-keys: position-monitor-v1-
       - run: node scripts/collect-position-monitor.mjs
       - run: node scripts/collect-sectors.mjs
+      - uses: actions/cache@v4
+        with:
+          path: .cache/signal-tools
+          key: signal-tools-v1-${{ github.run_id }}
+          restore-keys: signal-tools-v1-
+      - run: node scripts/collect-signal-tools.mjs
+      - run: node scripts/collect-alert-calendar.mjs
       - run: npm run collect:sentiment
       - run: npm run collect:etfs
       - run: node scripts/refresh-club.mjs

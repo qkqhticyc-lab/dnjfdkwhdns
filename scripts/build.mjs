@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdir, copyFile, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, copyFile, readFile, writeFile, readdir } from 'node:fs/promises';
 import {fingerprintAssets} from './fingerprint-assets.mjs';
 const config=JSON.parse(await readFile('site.config.json','utf8'));
 const key=config.supabase?.publishableKey||'';
@@ -34,6 +34,26 @@ const indicators=JSON.parse(await readFile('data/indicators.json','utf8'));if(in
 const {validateSentimentData}=await import('../sentiment-core.mjs');const sentiment=JSON.parse(await readFile('data/sentiment.json','utf8'));if(!validateSentimentData(sentiment))throw Error('Invalid sentiment data');await copyFile('data/sentiment.json','dist/data/sentiment.json');
 const {validateETFData}=await import('../etf-core.mjs');const etfs=JSON.parse(await readFile('data/etfs.json','utf8'));if(!validateETFData(etfs))throw Error('Invalid ETF data');await copyFile('data/etfs.json','dist/data/etfs.json');
 for(const file of ['screener.json','indicator-history.json'])await copyFile('data/'+file,'dist/data/'+file);
+const {validSignalManifest,ALERT_SHARDS}=await import('../signal-tools-publish.mjs');
+let signalManifest={schemaVersion:1,studyVersion:1,status:'unavailable',collectedAt:null,notificationShards:ALERT_SHARDS};
+try{signalManifest=JSON.parse(await readFile('.cache/signal-tools/signal-tools.json','utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
+if(!validSignalManifest(signalManifest))throw Error('Invalid signal tools manifest');
+await writeFile('dist/data/signal-tools.json',JSON.stringify(signalManifest));
+for(const name of ['signal-study.json',...Array.from({length:ALERT_SHARDS},(_,index)=>`alerts-${String(index).padStart(2,'0')}.json`)]){
+ let payload={...signalManifest,groups:[],stocks:{}};
+ try{payload=JSON.parse(await readFile('.cache/signal-tools/'+name,'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
+ if(payload.collectedAt!==signalManifest.collectedAt)throw Error('Mixed signal tool generations');
+ await writeFile('dist/data/'+name,JSON.stringify(payload));
+}
+await copyFile('notifications.css','dist/notifications.css');
+let alertCalendar={schemaVersion:1,status:'unavailable',collectedAt:null,items:[]};
+try{alertCalendar=JSON.parse(await readFile('.cache/signal-tools/alert-calendar.json','utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
+if(alertCalendar.schemaVersion!==1||!Array.isArray(alertCalendar.items))throw Error('Invalid alert calendar');
+await writeFile('dist/data/alert-calendar.json',JSON.stringify(alertCalendar));
+for(const file of (await readdir('dist')).filter(name=>name.endsWith('.html'))){
+ const html=await readFile('dist/'+file,'utf8');
+ await writeFile('dist/'+file,html.replace('</head>','<link rel="stylesheet" href="./notifications.css"></head>'));
+}
 let sectors={schemaVersion:1,collectedAt:null,items:[],coverage:[]};try{const candidate=JSON.parse(await readFile('.cache/sectors/publish/sectors.json','utf8'));if(candidate.schemaVersion!==1||!Array.isArray(candidate.items))throw Error('Invalid sector data');sectors=candidate;}catch{}await writeFile('dist/data/sectors.json',JSON.stringify(sectors));
 const version=await fingerprintAssets('dist');
 console.log('Built dist/. Assets '+version.revision+'. '+(config.supabase?.url?'Supabase configured.':'Hosting and database connection still required.'));
