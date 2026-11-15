@@ -3,16 +3,20 @@ import{screenEntryType}from'./entry-types.mjs';
 import{analyzeStrategy}from'./strategy-core.mjs';
 import{liveDailyRows}from'./live-chart-core.mjs';
 import{entrySnapshot}from'./entry-snapshot.mjs';
+import { rankInputs } from './screener-rank.mjs';
+import { buildSignalStudy } from './signal-study-core.mjs';
+import { signalEventHistory } from './signal-events.mjs';
 export const SCREEN_GROUPS=[{market:'KR',exchange:'KOSPI',label:'코스피'},{market:'KR',exchange:'KOSDAQ',label:'코스닥'},{market:'US',exchange:'NASDAQ',label:'나스닥'},{market:'US',exchange:'NYSE',label:'뉴욕'},{market:'US',exchange:'AMEX',label:'아멕스'},{market:'JP',exchange:'TOKYO',label:'도쿄'}];
 export const LIQUIDITY_LIMITS={KR:1e10,US:2e7,JP:1e9};
 export function liquidityStats(rows){const values=rows.slice(-20).map(p=>p.close*p.volume).filter(Number.isFinite),sorted=[...values].sort((a,b)=>a-b);return{average:values.length===20?values.reduce((a,b)=>a+b,0)/20:null,median:values.length===20?(sorted[9]+sorted[10])/2:null,activeDays:values.filter(v=>v>0).length,last:values.at(-1)??null};}
 export function passesLiquidity(p,level='standard'){if(level==='all')return true;const limit=LIQUIDITY_LIMITS[p.market]*(level==='strict'?2:1),l=p.liquidity;if(Number.isFinite(l?.average))return l.average>=limit&&l.median>=limit*.5&&l.activeDays>=15;return Number.isFinite(p.listTurnover)&&p.listTurnover>=limit*2;}
 export function excludedStock(p){return p.market==='KR'&&(p.symbol==='030960'||/스팩|기업인수목적|SPAC/i.test(p.name));}
 const currency={KR:'KRW',US:'USD',JP:'JPY'},zones={KR:'Asia/Seoul',US:'America/New_York',JP:'Asia/Tokyo'};
-export function screenRow(item,bars,now=new Date()){
+export function screenRow(item,bars,now=new Date(),options={}){
  const rows=liveDailyRows({...item,timezone:zones[item.market],bars,collectedAt:now.toISOString()},now).filter(p=>!p.provisional);
  if(rows.length<60)throw Error('Insufficient closed history');const guide=analyzeStrategy(rows),last=guide.frames.at(-1),signal=entrySnapshot(guide,last.asOf),index=signal?guide.frames.findIndex(p=>p.asOf===signal.asOf):-1;
- return{...item,liquidity:liquidityStats(rows),status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,candidate:reboundCandidate(guide.frames),state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
+ const tools=options.signalTools?{signalToolsVersion:1,studies:buildSignalStudy(rows,guide,date=>options.marketRegimes?.[date]||'unknown'),alertHistory:signalEventHistory(item,guide)}:{};
+ return{...item,...tools,rankInputs:rankInputs(last),liquidity:liquidityStats(rows),status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,candidate:reboundCandidate(guide.frames),state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
 }
 export function filterScreen(items,{market='ALL',query='',age=3,state='active',trend='ALL',volume=0,liquidity='all',excludeSpecial=false,excluded=[],entryType='all'}={}){
  return items.filter(p=>{const candidateMode=entryType==='reboundCandidate',ref=candidateMode?p.candidate:p.signal;return p.status==='ok'&&(candidateMode?ref?.state==='watch':entryType==='all'||entryType==='confirmed'&&['breakout','pullback','triangle','boxRetest'].includes(screenEntryType(p.signal))||screenEntryType(p.signal)===entryType)&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||ref&&ref.age<(Number(age)===0?1:Number(age)))&&(candidateMode||state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume);});
@@ -60,15 +64,15 @@ export async function collectScreener(fetcher=fetch,now=new Date(),previous,opti
  await Promise.all(Array.from({length:3},async()=>{while(cursor<items.length){const i=cursor++,s=items[i];if(s.status==='stale'){results[i]=s;continue;}
   try{const end=now.toISOString().slice(0,10).replaceAll('-','')+'2359',start=new Date(now.getTime()-730*86400000).toISOString().slice(0,10).replaceAll('-','')+'0000';
    const raw=await sourceJSON(fetcher,`https://api.stock.naver.com/chart/${s.market==='KR'?'domestic':'foreign'}/item/${encodeURIComponent(s.providerSymbol)}/day?startDateTime=${start}&endDateTime=${end}`);if(!Array.isArray(raw))throw Error('Missing daily history');
-   const bars=raw.filter(p=>/^\d{8}$/.test(p.localDate)&&[p.openPrice,p.highPrice,p.lowPrice,p.closePrice].every(v=>Number.isFinite(v)&&v>0)).map(p=>({date:p.localDate.replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3'),open:p.openPrice,high:p.highPrice,low:p.lowPrice,close:p.closePrice,volume:p.accumulatedTradingVolume}));results[i]=screenRow(s,bars,now);
+   const bars=raw.filter(p=>/^\d{8}$/.test(p.localDate)&&[p.openPrice,p.highPrice,p.lowPrice,p.closePrice].every(v=>Number.isFinite(v)&&v>0)).map(p=>({date:p.localDate.replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3'),open:p.openPrice,high:p.highPrice,low:p.lowPrice,close:p.closePrice,volume:p.accumulatedTradingVolume}));results[i]=screenRow(s,bars,now,{signalTools:!!options.signalTools,marketRegimes:universe.marketRegimes?.[s.market]?.regimes});
   }catch(e){const prior=old.get(screenKey(s));results[i]=prior?{...prior,...s,status:'stale',error:String(e.message).slice(0,120)}:{...s,status:'unavailable',error:String(e.message).slice(0,120)};}
   done++;if(done%100===0)options.onProgress?.({shard,done,total:items.length});
  }}));
- return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,bounceRulesVersion:1,candidateRulesVersion:1,universeScope:universe.universeScope,universeCollectedAt:universe.collectedAt,collectedAt:now.toISOString(),timeframe:'daily',coverage:universe.coverage,shard,shards,items:results};
+ return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,bounceRulesVersion:1,candidateRulesVersion:1,signalToolsVersion:options.signalTools?1:undefined,universeScope:universe.universeScope,universeCollectedAt:universe.collectedAt,collectedAt:now.toISOString(),timeframe:'daily',coverage:universe.coverage,shard,shards,items:results};
 }
 export function mergeScreenShards(universe,parts,count){
  if(parts.length!==count||new Set(parts.map(p=>p.shard)).size!==count)throw Error('Incomplete shards');const merged=new Map();
  for(const part of parts){if(part.rulesVersion!=='independent-v3'||part.patternRulesVersion!==1||part.bounceRulesVersion!==1||part.candidateRulesVersion!==1||part.universeCollectedAt!==universe.collectedAt||part.shards!==count||part.shard<0||part.shard>=count)throw Error('Mismatched scan');for(const p of part.items){const key=screenKey(p);if(merged.has(key)||shardFor(p,count)!==part.shard)throw Error('Duplicate or wrong-shard stock');merged.set(key,p);}}
  if(merged.size!==universe.items.length||universe.items.some(p=>!merged.has(screenKey(p))))throw Error('Incomplete universe');
- return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,bounceRulesVersion:1,candidateRulesVersion:1,universeScope:universe.universeScope,collectedAt:universe.collectedAt,completedAt:new Date().toISOString(),timeframe:'daily',coverage:universe.coverage,items:universe.items.map(p=>merged.get(screenKey(p)))};
+ return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,bounceRulesVersion:1,candidateRulesVersion:1,signalToolsVersion:parts.every(part=>part.signalToolsVersion===1)?1:undefined,marketRegimes:universe.marketRegimes,universeScope:universe.universeScope,collectedAt:universe.collectedAt,completedAt:new Date().toISOString(),timeframe:'daily',coverage:universe.coverage,items:universe.items.map(p=>merged.get(screenKey(p)))};
 }

@@ -1,3 +1,4 @@
+import {collectStudyMarkets} from './study-market.mjs';
 import{listScreenUniverse}from'../screener-core.mjs';import{mkdir,readFile,writeFile}from'node:fs/promises';
 await mkdir('.cache/screener',{recursive:true});let previous;try{previous=await fetch('https://qkqhticyc-lab.github.io/dnjfdkwhdns/data/screener.json',{signal:AbortSignal.timeout(15000)}).then(r=>r.json());}catch{try{previous=JSON.parse(await readFile('data/screener.json','utf8'));}catch{}}
-const u=await listScreenUniverse(fetch,new Date(),previous);await writeFile('.cache/screener/universe.json',JSON.stringify(u));console.log(JSON.stringify({count:u.items.length,coverage:u.coverage}));if(!u.items.length)throw Error('No universe');
+const now=new Date();const [u,marketRegimes]=await Promise.all([listScreenUniverse(fetch,now,previous),collectStudyMarkets(now)]);u.marketRegimes=marketRegimes;await writeFile('.cache/screener/universe.json',JSON.stringify(u));console.log(JSON.stringify({count:u.items.length,coverage:u.coverage}));if(!u.items.length)throw Error('No universe');

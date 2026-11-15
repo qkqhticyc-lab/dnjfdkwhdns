@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'screener-core.mjs'
+      - 'screener-rank.mjs'
+      - 'signal-study-core.mjs'
+      - 'signal-events.mjs'
+      - 'scripts/study-market.mjs'
       - 'strategy-core.mjs'
       - 'pattern-core.mjs'
       - 'oversold-core.mjs'
