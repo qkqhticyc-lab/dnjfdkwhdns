@@ -95,6 +95,7 @@ function render() {
 }
 function switchSection(value) {
   active = value; kind = 'all'; limit = 30;
+  if(active==='earnings')$('research-content').hidden=false;
   const days = [...new Set(data?.[active]?.items?.map(item => item.date) || [])].sort().reverse();
   date = days[0] || '';
   const select = $('research-date'); select.replaceChildren();
@@ -109,6 +110,7 @@ export async function initResearch() {
   $('research-date').onchange = event => { date = event.target.value; limit = 30; if (data) render(); };
   $('research-more').onclick = () => { limit += 30; render(); };
   $('research-retry').onclick = load;
+  if(active==='earnings')switchSection(active);
   async function load() {
     $('research-retry').disabled = true;
     earningsCards.refresh();
