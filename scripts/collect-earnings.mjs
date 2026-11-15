@@ -1,6 +1,8 @@
 import {readFile, writeFile, mkdir, rename} from 'node:fs/promises';
 import {EARNINGS_METRICS, parseEarningsMarket, mergeEarningsMarkets, mergeEarningsHistory, parseEarningsDates, financeHistory, validEarnings} from '../earnings-core.mjs';
 
+import {collectUsEarnings} from './us-earnings-source.mjs';
+
 const CACHE = '.cache/earnings';
 const SITE = 'https://qkqhticyc-lab.github.io/dnjfdkwhdns/';
 const now = Date.now(), attemptedAt = new Date(now).toISOString();
@@ -17,6 +19,13 @@ let previous = await read(CACHE+'/publish.json', null);
 try {
  const live = await request(SITE+'data/earnings.json');
  if (validEarnings(live) && (!validEarnings(previous) || live.attemptedAt>previous.attemptedAt)) previous=live;
+} catch {}
+const previousAll=previous;
+previous=validEarnings(previousAll)?{...previousAll,...previousAll.markets?.KR,items:previousAll.items.filter(item=>(item.market||'KR')==='KR')}:null;
+let screen=await read('data/screener.json',{});
+try {
+ const live=await request(SITE+'data/screener.json');
+ if(live.schemaVersion===1&&Array.isArray(live.items)&&(!screen.collectedAt||live.collectedAt>screen.collectedAt))screen=live;
 } catch {}
 const companies = await read(CACHE+'/companies.json', {});
 
@@ -60,11 +69,6 @@ try {
  const markets = mergeEarningsMarkets(results.flat());
  const period = markets.map(row=>row.period).sort().at(-1);
  const latest = markets.filter(row=>row.period===period);
- let screen = await read('data/screener.json', {});
- try {
-  const live = await request(SITE+'data/screener.json');
-  if (live.schemaVersion===1 && Array.isArray(live.items) && (!screen.collectedAt || live.collectedAt>screen.collectedAt)) screen=live;
- } catch {}
  const chartRows = new Map((screen.items||[]).filter(row=>row.market==='KR').map(row=>[row.symbol,row]));
  const items = [];
  let failed=0, outside=0;
@@ -75,7 +79,7 @@ try {
    const date = info.dates.find(date=>date.period===item.period && date.basis===item.basis);
    if (!date || Date.parse(date.date)>now || now-Date.parse(date.date)>60*86400000) {outside++;return null;}
    const chart=chartRows.get(item.symbol);
-   return {...item, id:[item.symbol,item.period,item.basis].join(':'), announcedOn:date.date,
+   return {...item, market:'KR', id:[item.symbol,item.period,item.basis].join(':'), announcedOn:date.date,
     marketCap:info.marketCap, companyFetchedAt:info.fetchedAt, stale:!!info.stale,
     reportTitle:info.disclosure?.title||'분기 잠정실적 · FnGuide 집계',
     disclosureUrl:info.disclosure?`https://m.stock.naver.com/domestic/stock/${item.symbol}/notice/${info.disclosure.id}`:null,
@@ -98,7 +102,18 @@ try {
  console.log('Earnings source unavailable; retaining previous snapshot ('+error.message+').');
  output=validEarnings(previous)?{...previous,status:'stale',attemptedAt,items:previous.items.map(item=>({...item,stale:true,chart:null}))}:{schemaVersion:1,status:'unavailable',attemptedAt,collectedAt:null,items:[]};
 }
+const usCache=await read(CACHE+'/us-companies.json',{});
+const us=await collectUsEarnings({previous:previousAll,charts:screen.items||[],cache:usCache,request,now});
+const kr=output;
+const metadata=feed=>({status:feed.status,collectedAt:feed.collectedAt,attemptedAt:feed.attemptedAt,period:feed.period,scope:feed.scope,coverage:feed.coverage});
+const anyFresh=[kr,us].some(feed=>['ok','partial'].includes(feed.status));
+output={schemaVersion:1,status:[kr,us].every(feed=>feed.status==='ok')?'ok':anyFresh?'partial':kr.items.length||us.items.length?'stale':'unavailable',
+ attemptedAt,collectedAt:anyFresh?attemptedAt:previousAll?.collectedAt||null,scope:'kr-consensus-us-representative',chartCollectedAt:screen.collectedAt||null,
+ markets:{KR:metadata(kr),US:metadata(us)},
+ coverage:{provided:(kr.coverage?.provided||0)+us.coverage.provided,collected:(kr.coverage?.collected||0)+us.coverage.collected,failed:(kr.coverage?.failed||0)+us.coverage.failed},
+ items:[...kr.items,...us.items]};
 if (!validEarnings(output)) throw Error('Invalid earnings publication');
+await writeFile(CACHE+'/us-companies.json',JSON.stringify(usCache));
 await writeFile(CACHE+'/publish.json.tmp',JSON.stringify(output));
 await rename(CACHE+'/publish.json.tmp',CACHE+'/publish.json');
 await writeFile(CACHE+'/companies.json',JSON.stringify(companies));

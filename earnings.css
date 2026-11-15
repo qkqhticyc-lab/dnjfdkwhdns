@@ -3,3 +3,6 @@
 @media(max-width:360px){.earnings-card{padding:12px}.earnings-metrics .earnings-actual{font-size:16px}.earnings-metrics td{font-size:12px}.earnings-comparison strong{font-size:12px}.earnings-card-heading h3{font-size:18px}.earnings-metrics th,.earnings-metrics td{padding:9px 2px}.earnings-history td,.earnings-history tbody th{font-size:10px;padding:6px 2px}}
 
 .earnings-net-basis{display:block;font-size:10px;font-weight:400;color:#74867b;margin-top:3px}.earnings-metrics th,.earnings-metrics td{line-height:1.5;padding-top:8px;padding-bottom:8px}
+.earnings-markets{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.earnings-markets button{border-radius:20px;padding:8px 16px;border:1px solid #dce5df;background:#fff;color:#425c51;font-size:13px}.earnings-markets button[aria-pressed=true]{background:#257562;color:#fff;border-color:#257562}.earnings-history-wrap{overflow-x:auto}.earnings-card[data-earnings-market=US] .earnings-history{min-width:0}.earnings-card[data-earnings-market=US] .earnings-history td{font-size:11px}.earnings-card[data-earnings-market=US] .earnings-history th:first-child{width:56px}
+
+@media(max-width:400px){.earnings-card[data-earnings-market=US] .earnings-history td{font-size:10px;padding:7px 2px}.earnings-card[data-earnings-market=US] .earnings-history th{font-size:10px;padding:7px 2px}}

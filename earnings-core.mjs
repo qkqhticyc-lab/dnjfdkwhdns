@@ -1,4 +1,5 @@
 import {rankScreenItem} from './screener-rank.mjs';
+import {validNewsDate, zonedTime} from './stock-news-core.mjs';
 
 export const EARNINGS_THRESHOLD = 5;
 export const EARNINGS_METRICS = [
@@ -126,42 +127,56 @@ export function surprise(actual, forecast) {
 }
 
 export function earningsVerdict(item) {
- const values = EARNINGS_METRICS.map(metric=>surprise(item.metrics?.[metric.key]?.actual, item.metrics?.[metric.key]?.forecast));
+ const values = (item.market==='US'?[{key:'eps'}]:EARNINGS_METRICS).map(metric=>surprise(item.metrics?.[metric.key]?.actual, item.metrics?.[metric.key]?.forecast));
  const positive = values.some(value=>value.percent>=EARNINGS_THRESHOLD || ['흑자 전환','흑자 달성'].includes(value.label));
  const negative = values.some(value=>value.percent<=-EARNINGS_THRESHOLD || ['적자 전환','적자 발생'].includes(value.label));
  if (positive && negative) return {kind:'mixed', label:'실적 혼재'};
- if (negative) return {kind:'shock', label:'어닝 쇼크'};
- if (positive) return {kind:'surprise', label:'어닝 서프라이즈'};
- return values.every(value=>value.kind==='unknown') ? {kind:'unknown', label:'비교 자료 부족'} : {kind:'inline', label:'예상 범위'};
+ if (negative) return {kind:'shock', label:item.market==='US'?'EPS 쇼크':'어닝 쇼크'};
+ if (positive) return {kind:'surprise', label:item.market==='US'?'EPS 서프라이즈':'어닝 서프라이즈'};
+ return values.every(value=>value.kind==='unknown') ? {kind:'unknown', label:'비교 자료 부족'} : {kind:'inline', label:item.market==='US'?'EPS 예상 범위':'예상 범위'};
 }
 
 export function earningsDecision(item, now=Date.now()) {
  if (item.stale) return {kind:'unavailable',label:'실적 자료 갱신 대기',reasons:['마지막 확인 자료를 표시하고 있습니다. 새 자료를 확인한 뒤 매수 조건을 비교합니다.']};
+ if (item.market==='US') {
+  if (item.financialStatus!=='ok' || item.financialStale) return {kind:'unavailable',label:'재무실적 확인 대기',reasons:['EPS와 같은 결산분기의 매출·순이익 자료를 확인합니다.']};
+  const eps=item.metrics?.eps;
+  if (!(eps?.actual>0 && surprise(eps.actual,eps.forecast).percent>=EARNINGS_THRESHOLD && item.metrics?.net?.actual>0 && Number.isFinite(item.revenueGrowthYoY) && item.revenueGrowthYoY>=0)) return {kind:'wait',label:'실적 개선 관찰',reasons:['Nasdaq 비교 EPS 5% 이상 상회·흑자, 순이익 흑자와 전년 동기 대비 매출 증가를 함께 확인합니다.']};
+  if (now-Date.parse(item.announcedOn+'T00:00:00Z')>60*86400000) return {kind:'wait',label:'최근 실적 발표 대기',reasons:['최근 60일 이내 발표한 실적으로 매수 조건을 비교합니다.']};
+  return earningsChartDecision(item,now,['EPS 5% 이상 상회·흑자, 순이익 흑자와 전년 동기 매출 증가']);
+ }
  const verdict = earningsVerdict(item), reasons = [];
  const operating = item.metrics?.operating, net = item.metrics?.net, revenue = item.metrics?.revenue;
  const opChange = surprise(operating?.actual, operating?.forecast).percent;
  if (verdict.kind==='mixed' || verdict.kind==='shock') return {kind:'wait', label:verdict.kind==='mixed'?'실적 혼재 · 매수 대기':'실적 부진 · 매수 대기', reasons:['예상치 대비 크게 부진한 실적 항목이 있습니다.']};
  if (![revenue?.actual, operating?.actual, net?.actual].every(value=>Number.isFinite(value)&&value>0)) return {kind:'wait',label:'실적 확인 대기',reasons:['매출·영업이익·순이익의 흑자와 비교 수치를 확인합니다.']};
  if (!(opChange>=EARNINGS_THRESHOLD) || surprise(revenue.actual,revenue.forecast).percent===null || revenue.actual<revenue.forecast || surprise(net.actual,net.forecast).percent===null || net.actual<net.forecast) return {kind:'wait',label:'실적 개선 관찰',reasons:['영업이익 5% 이상 상회와 매출·순이익의 예상치 충족을 함께 확인합니다.']};
+ return earningsChartDecision(item,now,['매출·순이익 예상치 충족, 영업이익 5% 이상 상회']);
+}
+
+function earningsChartDecision(item,now,quality) {
+ const reasons=[], market=item.market||'KR', us=market==='US';
  const chart = item.chart, signal = chart?.signal;
- const fresh = chart?.asOf && now-Date.parse(chart.asOf+'T15:30:00+09:00')<=5*86400000 && Date.parse(chart.asOf+'T15:30:00+09:00')<=now;
- if (!fresh || chart?.status!=='ok' || chart.market!=='KR' || chart.symbol!==item.symbol || chart.asOf<item.announcedOn) return {kind:'unavailable',label:'최신 차트 확인 대기',reasons:['최근 마감봉 자료를 확인한 뒤 매수 조건을 비교합니다.']};
+ const close=validNewsDate(chart?.asOf)?zonedTime(chart.asOf,us?'16:00':'15:30',us?'America/New_York':'Asia/Seoul'):NaN;
+ const fresh=Number.isFinite(close)&&now-close<=5*86400000&&close<=now;
+ if (!fresh || chart?.status!=='ok' || chart.market!==market || chart.symbol!==item.symbol || chart.asOf<item.announcedOn) return {kind:'unavailable',label:'최신 차트 확인 대기',reasons:['최근 마감봉 자료를 확인한 뒤 매수 조건을 비교합니다.']};
  if (signal?.status!=='active' || signal.provisional || !['breakout','pullback','triangle','boxRetest'].includes(signal.entryType) || signal.asOf<=item.announcedOn || !Number.isFinite(signal.age) || signal.age>5) return {kind:'wait',label:'실적 양호 · 진입 대기',reasons:['발표 다음 거래일부터 발생한 최근 5봉의 돌파·눌림·패턴 진입 신호를 기다립니다.']};
  const rank = rankScreenItem(chart), price = chart.price;
  const risk = price-signal.initialStop, reward = signal.tp1-price;
  const riskPercent = risk/price*100, rewardRisk = risk>0?reward/risk:null;
  if (!rank || rank.score<70 || Math.abs(rank.gapPct)>5 || chart.rankInputs?.shortAligned!==true || chart.rankInputs?.mediumAligned!==true) reasons.push('우선순위 70점·진입가 이격 ±5%·단기와 중기 정렬을 함께 확인합니다.');
- if (!(chart.liquidity?.average>=1e10) || !(chart.liquidity?.median>=5e9) || !(chart.liquidity?.activeDays>=15) || /스팩|SPAC|양지사/i.test(item.name)) reasons.push('20봉 평균 거래대금 100억원·중앙값 50억원·거래 발생 15일을 확인합니다.');
+ if (!(chart.liquidity?.average>=(us?2e7:1e10)) || !(chart.liquidity?.median>=(us?1e7:5e9)) || !(chart.liquidity?.activeDays>=15) || /스팩|SPAC|양지사/i.test(item.name)) reasons.push(us?'20봉 평균 거래대금 2천만 달러·중앙값 1천만 달러·거래 발생 15일을 확인합니다.':'20봉 평균 거래대금 100억원·중앙값 50억원·거래 발생 15일을 확인합니다.');
  if (!Number.isFinite(rewardRisk) || rewardRisk<1.2 || !(riskPercent>0&&riskPercent<=8)) reasons.push('현재가 기준 TP1 손익비 1.2 이상·초기 손절까지 8% 이내를 확인합니다.');
  if (reasons.length) return {kind:'wait',label:'진입 가격 대기',reasons};
- return {kind:'buy',label:'매수 검토',reasons:['매출·순이익 예상치 충족, 영업이익 5% 이상 상회',`${signal.entryLabel} · 우선순위 ${rank.score}점 · TP1 손익비 ${rewardRisk.toFixed(2)}`]};
+ return {kind:'buy',label:'매수 검토',reasons:[...quality,`${signal.entryLabel} · 우선순위 ${rank.score}점 · TP1 손익비 ${rewardRisk.toFixed(2)}`]};
 }
 
 export function validEarnings(data) {
- const validMetrics = metrics => metrics && EARNINGS_METRICS.every(({key})=>!metrics[key]||[metrics[key].actual,metrics[key].forecast].every(value=>value===null||Number.isFinite(value)));
+ const validMetrics = metrics => metrics && [...EARNINGS_METRICS,{key:'eps'}].every(({key})=>!metrics[key]||[metrics[key].actual,metrics[key].forecast].every(value=>value===null||Number.isFinite(value)));
+ const validPeriod=(period,us)=> (us?/^20\d{2}-(0[1-9]|1[0-2])$/:/^20\d{2}\/[1-4]$/).test(period);
  return data?.schemaVersion===1 && ['ok','partial','stale','unavailable'].includes(data.status) && Array.isArray(data.items) && data.items.every(item=>
-  /^[A-Z0-9]{6}$/.test(item.symbol) && /^20\d{2}\/[1-4]$/.test(item.period) && typeof item.name==='string' && item.name.length>0 && item.name.length<=120 &&
-  ['consolidated','separate'].includes(item.basis) && /^20\d{2}-\d{2}-\d{2}$/.test(item.announcedOn) && validMetrics(item.metrics) &&
-  Array.isArray(item.history||[]) && (item.history||[]).every(point=>/^20\d{2}\/[1-4]$/.test(point.period)&&point.basis===item.basis&&validMetrics(point.metrics))
+  [undefined,'KR','US'].includes(item.market) && (item.market==='US'?/^[A-Z][A-Z0-9.-]{0,9}$/:/^[A-Z0-9]{6}$/).test(item.symbol) && validPeriod(item.period,item.market==='US') && typeof item.name==='string' && item.name.length>0 && item.name.length<=120 &&
+  (item.market==='US'?item.basis==='reported'&&item.currency==='USD'&&[null,'USD','EUR','TWD','JPY','GBP','CAD','CHF'].includes(item.financialCurrency)&&Number.isFinite(item.metrics?.eps?.actual):['consolidated','separate'].includes(item.basis)) && validNewsDate(item.announcedOn) && validMetrics(item.metrics) &&
+  Array.isArray(item.history||[]) && (item.history||[]).every(point=>validPeriod(point.period,item.market==='US')&&point.basis===item.basis&&validMetrics(point.metrics))
  );
 }
