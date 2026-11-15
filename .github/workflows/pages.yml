@@ -60,6 +60,12 @@ jobs:
       - run: node scripts/load-screener.mjs
       - uses: actions/cache@v4
         with:
+          path: .cache/earnings
+          key: earnings-v1-${{ github.run_id }}
+          restore-keys: earnings-v1-
+      - run: node scripts/collect-earnings.mjs
+      - uses: actions/cache@v4
+        with:
           path: .cache/position-monitor
           key: position-monitor-v1-${{ github.run_id }}
           restore-keys: position-monitor-v1-

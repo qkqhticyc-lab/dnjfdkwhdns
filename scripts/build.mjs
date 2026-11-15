@@ -55,5 +55,11 @@ for(const file of (await readdir('dist')).filter(name=>name.endsWith('.html'))){
  await writeFile('dist/'+file,html.replace('</head>','<link rel="stylesheet" href="./notifications.css"></head>'));
 }
 let sectors={schemaVersion:1,collectedAt:null,items:[],coverage:[]};try{const candidate=JSON.parse(await readFile('.cache/sectors/publish/sectors.json','utf8'));if(candidate.schemaVersion!==1||!Array.isArray(candidate.items))throw Error('Invalid sector data');sectors=candidate;}catch{}await writeFile('dist/data/sectors.json',JSON.stringify(sectors));
+await copyFile('earnings.css','dist/earnings.css');
+const {validEarnings}=await import('../earnings-core.mjs');
+let earnings={schemaVersion:1,status:'unavailable',collectedAt:null,items:[]};
+try{earnings=JSON.parse(await readFile('.cache/earnings/publish.json','utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+if(!validEarnings(earnings))throw Error('Invalid quarterly earnings data');
+await writeFile('dist/data/earnings.json',JSON.stringify(earnings));
 const version=await fingerprintAssets('dist');
 console.log('Built dist/. Assets '+version.revision+'. '+(config.supabase?.url?'Supabase configured.':'Hosting and database connection still required.'));

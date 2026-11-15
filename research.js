@@ -1,7 +1,8 @@
+import {initEarningsCards} from './earnings.js';
 const $ = id => document.getElementById(id);
 const sections = {
   targets: { kicker: 'TARGET PRICE', title: '목표주가 변동', description: '국내 증권사 종목 리포트 · 같은 증권사의 이전 목표주가와 비교', filters: [['all', '전체'], ['up', '상향'], ['down', '하향'], ['same', '유지'], ['unknown', '비교 불가']] },
-  earnings: { kicker: 'EARNINGS REVIEW', title: '실적 발표와 종목 리뷰', description: '최근 발행된 증권사 실적 리뷰 · 수치가 확인된 보고서는 영업이익도 함께 표시', filters: [['all', '전체'], ['profit', '영업이익 확인'], ['growth', '전년 대비 증가']] },
+  earnings: { kicker: 'EARNINGS', title: '실적 발표 · 매수 검토', description: '공시 실적·발표직전 예상치·최근 분기 추이와 현재 진입 조건을 함께 확인하세요.', filters: [['all', '전체'], ['profit', '영업이익 확인'], ['growth', '전년 대비 증가']] },
   overseas: { kicker: 'GLOBAL RESEARCH', title: '해외주식 리포트', description: '국내 증권사가 발행한 해외 종목 · 산업 · 시황 보고서', filters: [['all', '전체'], ['stock', '종목'], ['market', '산업·시황'], ['review', '실적 리뷰'], ['preview', '실적 프리뷰']] },
 };
 const money = value => Number.isFinite(value) && value > 0 ? new Intl.NumberFormat('ko-KR').format(value) + '원' : '미제시';
@@ -22,7 +23,8 @@ function selectKind(item, kind) {
   if (kind === 'preview') return item.kind === '실적 프리뷰';
   return item.direction === kind || item.category === kind;
 }
-let data, active = 'targets', kind = 'all', date = '', query = '', limit = 30;
+let earningsCards;
+let data, active = new URLSearchParams(location.search).get('tab')==='earnings'?'earnings':'targets', kind = 'all', date = '', query = '', limit = 30;
 function scopeRows() { return (data?.[active]?.items || []).filter(item => (!date || item.date === date) && (!query || [item.company, item.symbol, item.broker, item.title].join(' ').toLocaleLowerCase().includes(query))); }
 function row(item) {
   const article = el('article', null, `research-row ${active === 'earnings' ? 'earnings-row' : ''}`);
@@ -57,6 +59,7 @@ function row(item) {
   return article;
 }
 function render() {
+  earningsCards?.show(active==='earnings');
   const section = sections[active], feed = data?.[active];
   $('research-kicker').textContent = section.kicker;
   $('research-title').textContent = section.title;
@@ -100,6 +103,7 @@ function switchSection(value) {
   render();
 }
 export async function initResearch() {
+  earningsCards=initEarningsCards();
   document.querySelectorAll('[data-research-tab]').forEach(button => { button.onclick = () => switchSection(button.dataset.researchTab); });
   $('research-search').oninput = event => { query = event.target.value.trim().toLocaleLowerCase(); limit = 30; if (data) render(); };
   $('research-date').onchange = event => { date = event.target.value; limit = 30; if (data) render(); };
@@ -107,6 +111,7 @@ export async function initResearch() {
   $('research-retry').onclick = load;
   async function load() {
     $('research-retry').disabled = true;
+    earningsCards.refresh();
     try {
       const response = await fetch('./data/research.json', { cache: 'no-store' });
       if (!response.ok) throw Error('Research data unavailable');

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="./site-pages.css">
   <link rel="stylesheet" href="./news.css">
   <script src="./app.js" type="module"></script>
+  <link rel="stylesheet" href="./earnings.css">
 </head>
 <body data-page="news">
   <header>
@@ -28,7 +29,7 @@
   <main class="news-page">
     <div class="news-intro">
       <div><h1>뉴스와 경제일정</h1><p>증시 주요 소식과 경제지표 발표를 함께 확인하세요.</p></div>
-      <button id="news-refresh" type="button">자료 다시 불러오기 ↻</button>
+      <div class="news-intro-actions"><a class="news-earnings-link" href="./reports.html?tab=earnings">기업 실적 보기</a><button id="news-refresh" type="button">자료 다시 불러오기 ↻</button></div>
     </div>
     <p id="news-status" class="news-status" role="status">뉴스와 경제일정을 불러오고 있습니다.</p>
     <div id="news-content" hidden>
