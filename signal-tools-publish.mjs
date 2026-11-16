@@ -44,7 +44,7 @@ export function buildSignalTools(scan, sectors) {
 }
 
 export function validSignalManifest(data) {
-  return data?.schemaVersion === 1 && data.studyVersion === 1 && ['ok', 'unavailable'].includes(data.status)
+  return data?.schemaVersion === 1 && [1,2].includes(data.studyVersion) && ['ok', 'unavailable'].includes(data.status)
     && (data.status === 'unavailable' || Number.isFinite(Date.parse(data.collectedAt)))
     && data.notificationShards === ALERT_SHARDS;
 }

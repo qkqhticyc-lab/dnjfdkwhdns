@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rankScreenItem, rankInputs, passesRankFilters } from '../screener-rank.mjs';
-import { evaluateStudyPath, buildSignalStudy, studySummary, STUDY_COSTS, netStudyReturn } from '../signal-study-core.mjs';
+import { evaluateStudyPath, buildSignalStudy, studySummary, emptyStudyGroup, STUDY_COSTS, netStudyReturn } from '../signal-study-core.mjs';
 import { signalEventHistory } from '../signal-events.mjs';
 import { benchmarkRegimes } from '../scripts/study-market.mjs';
 import { buildSignalTools } from '../signal-tools-publish.mjs';
@@ -65,6 +65,49 @@ test('signal studies separate incomplete horizons, costs and entry gaps', () => 
   assert.equal(studySummary(buildSignalStudy(gapRows, guide)).gapSkipped, 1);
   const extended = [...rows, ...Array.from({ length: 10 }, (_, index) => ({ ...bar({ close: 500, high: 501 }), asOf: `2026-02-${String(index + 1).padStart(2, '0')}` }))];
   assert.equal(buildSignalStudy(extended, { ...guide, events: guide.events.slice(0, 1) })[0].horizons[20].ratioSum, groups[0].horizons[20].ratioSum);
+});
+
+function achievementFixture() {
+  const rows=Array.from({length:24},(_,index)=>({...bar(),asOf:new Date(Date.UTC(2026,0,index+1)).toISOString().slice(0,10)}));
+  const guide={frames:rows.map(row=>({...row,trend:'up',trade:{initialStop:95,tp1:110,tp2:120}})),events:[{key:'breakoutEntry',asOf:rows[0].asOf}]};
+  return {rows,guide};
+}
+
+test('achievement ratios use each completed horizon and include TP1 before a later TP2 or stop',()=>{
+  const {rows,guide}=achievementFixture();
+  rows[3]= {...rows[3],high:112,close:109};
+  rows[7]= {...rows[7],high:122,close:119};
+  let summary=studySummary(buildSignalStudy(rows,guide));
+  assert.deepEqual(summary.results.map(row=>[row.pathCount,row.tp1Rate,row.tp2Rate,row.stopRate]),[[1,100,0,0],[1,100,100,0],[1,100,100,0]]);
+  rows[7]={...rows[7],high:109,low:94,close:97};
+  summary=studySummary(buildSignalStudy(rows,guide));
+  assert.deepEqual(summary.results.map(row=>[row.tp1Count,row.tp2Count,row.stopCount]),[[1,0,0],[1,0,1],[1,0,1]]);
+  assert.equal(summary.results[2].tp1Rate,100);assert.equal(summary.results[2].stopRate,100);
+});
+
+test('same-bar target and stop ambiguity remains conservative and incomplete horizons never enter the denominator',()=>{
+  const {rows,guide}=achievementFixture();
+  rows[2]={...rows[2],high:125,low:94};
+  const summary=studySummary(buildSignalStudy(rows.slice(0,8),guide));
+  assert.equal(summary.results[0].tp1Rate,0);assert.equal(summary.results[0].tp2Rate,0);assert.equal(summary.results[0].stopRate,100);assert.equal(summary.results[0].ambiguous,1);
+  assert.equal(summary.results[1].pathCount,0);assert.equal(summary.results[1].tp1Rate,null);assert.equal(summary.results[1].pending,1);
+  const empty=studySummary([]);assert.equal(empty.results[0].stopRate,null);
+});
+
+test('achievement aggregation weights counts and reads legacy 20-bar paths without inventing shorter-horizon results',()=>{
+  const a=emptyStudyGroup('2026-01','breakout','up'),b=emptyStudyGroup('2026-02','breakout','up');
+  a.signals=2;b.signals=8;
+  for(const group of [a,b]){
+    const count=group.signals;
+    Object.assign(group.horizons[20],{count,pathCount:count,tp1:group===a?0:8,tp2:group===a?0:4,stop:group===a?2:4,ambiguous:1});
+  }
+  const summary=studySummary([a,b]).results[2];
+  assert.equal(summary.pathCount,10);assert.equal(summary.tp1Rate,80);assert.equal(summary.tp2Rate,40);assert.equal(summary.stopRate,60);assert.equal(summary.ambiguous,2);
+  const {rows,guide}=achievementFixture();rows[3]={...rows[3],high:112};
+  const legacy=buildSignalStudy(rows,guide)[0];
+  for(const horizon of [5,10,20])for(const key of ['pathCount','tp1','tp2','stop','ambiguous'])delete legacy.horizons[horizon][key];
+  const old=studySummary([legacy]);assert.equal(old.results[0].count,1);assert.equal(old.results[0].pathCount,0);assert.equal(old.results[0].tp1Rate,null);
+  assert.equal(old.results[2].pathCount,1);assert.equal(old.results[2].tp1Rate,100);assert.equal(old.results[2].stopRate,0);
 });
 
 test('notifications bind target and exit events to each independent entry cycle', () => {

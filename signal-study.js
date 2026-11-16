@@ -1,10 +1,10 @@
 import { SECTORS } from './sector-core.mjs';
 import { ENTRY_LABELS } from './entry-types.mjs';
-import { STUDY_COSTS, studySummary } from './signal-study-core.mjs';
+import { studySummary } from './signal-study-core.mjs';
 import { validSignalManifest } from './signal-tools-publish.mjs';
 
 const MARKET_LABELS = { KR: '한국', US: '미국', JP: '일본' };
-const percent = value => value === null || !Number.isFinite(value) ? '—' : (value > 0 ? '+' : '') + value.toFixed(2) + '%';
+const achievement = (result,key) => result.pathCount ? result[key+'Rate'].toFixed(1)+'% ('+result[key+'Count'].toLocaleString()+'건)' : result.count?'재집계 대기':'—';
 function node(tag, text, className) {
   const element = document.createElement(tag);
   if (text !== undefined) element.textContent = text;
@@ -19,8 +19,6 @@ export function initSignalStudy() {
   let data, loading = false;
   for (const [id, label] of Object.entries(SECTORS)) byId('study-sector').append(new Option(label, id));
   for (const [id, label] of Object.entries(ENTRY_LABELS)) if (id !== 'unknown') byId('study-type').append(new Option(label, id));
-  for (const [index, cost] of STUDY_COSTS.entries()) byId('study-cost').append(new Option(cost.label, String(index)));
-  byId('study-cost').value = '1';
 
   function selectedGroups() {
     const from = byId('study-from').value, to = byId('study-to').value;
@@ -37,15 +35,14 @@ export function initSignalStudy() {
     body.replaceChildren();
     for (const [value, label] of Object.entries(labels)) {
       const selected = groups.filter(group => group[key] === value);
-      const summary = studySummary(selected, +byId('study-cost').value);
+      const summary = studySummary(selected);
       if (!summary.signals) continue;
       const result = summary.results[2], row = node('tr');
-      for (const text of [label, summary.signals.toLocaleString(), result.count.toLocaleString(), percent(result.mean),
-        result.winRate === null ? '—' : result.winRate.toFixed(1) + '%',
-        summary.path.count ? (summary.path.tp1 / summary.path.count * 100).toFixed(1) + '%' : '—',
-        summary.path.count ? (summary.path.tp2 / summary.path.count * 100).toFixed(1) + '%' : '—']) row.append(node('td', text));
+      for (const text of [label, summary.signals.toLocaleString(), result.pathCount.toLocaleString(), achievement(result,'tp1'),
+        achievement(result,'tp2'),achievement(result,'stop'),result.ambiguous.toLocaleString()+'건']) row.append(node('td', text));
       if (result.count < 30) row.firstChild.append(node('small', '표본 30건 미만'));
-      row.children[3].className = result.mean > 0 ? 'up' : result.mean < 0 ? 'down' : '';
+      row.children[3].className = row.children[4].className = 'up';
+      row.children[5].className = 'down';
       body.append(row);
     }
     if (!body.children.length) {
@@ -57,20 +54,21 @@ export function initSignalStudy() {
 
   function draw() {
     if (!data) return;
-    const groups = selectedGroups(), costIndex = +byId('study-cost').value;
-    const summary = studySummary(groups, costIndex);
+    const groups = selectedGroups();
+    const summary = studySummary(groups);
     byId('study-summary').textContent = `신호 ${summary.signals.toLocaleString()}건 · 다음 봉 진입 제외 ${summary.gapSkipped.toLocaleString()}건 · 다음 봉 미제공 ${summary.missingNext.toLocaleString()}건`;
     const horizonRows = byId('study-horizons'); horizonRows.replaceChildren();
     for (const result of summary.results) {
       const row = node('tr');
-      for (const text of [`${result.horizon}봉`, result.count.toLocaleString(), result.pending.toLocaleString(), percent(result.mean),
-        result.winRate === null ? '—' : result.winRate.toFixed(1) + '%', percent(result.meanMae), percent(result.worstMae)]) row.append(node('td', text));
-      row.children[3].className = result.mean > 0 ? 'up' : result.mean < 0 ? 'down' : '';
+      for (const text of [`${result.horizon}봉`, result.pathCount.toLocaleString(), result.pending.toLocaleString(), achievement(result,'tp1'),
+        achievement(result,'tp2'),achievement(result,'stop'),result.ambiguous.toLocaleString()+'건']) row.append(node('td', text));
+      row.children[3].className = row.children[4].className = 'up';
+      row.children[5].className = 'down';
       horizonRows.append(row);
     }
-    byId('study-path').textContent = summary.path.count
-      ? `20봉 완료 ${summary.path.count.toLocaleString()}건 · TP1 선행 도달 ${(summary.path.tp1 / summary.path.count * 100).toFixed(1)}% · TP2 선행 도달 ${(summary.path.tp2 / summary.path.count * 100).toFixed(1)}% · 초기 손절 접촉 ${(summary.path.stop / summary.path.count * 100).toFixed(1)}% · 동일 봉 순서 불명 ${summary.path.ambiguous.toLocaleString()}건`
-      : '20봉이 완료된 경로 표본을 기다리고 있습니다.';
+    byId('study-path').textContent = summary.results.some(result=>result.pathCount<result.count)
+      ? '관찰 기간별 목표·손절 도달 이력을 다시 집계하고 있습니다. 재집계가 끝난 표본만 비율에 반영합니다.'
+      : '각 비율은 해당 관찰 기간이 완료된 표본 기준입니다. TP2 달성은 TP1에도 포함되며, TP1 달성 후 손절은 두 항목에 각각 집계합니다. 동일 봉에서 목표·손절이 함께 닿으면 손절을 우선 집계합니다.';
     drawTable('study-types', ENTRY_LABELS, groups, 'type');
     drawTable('study-markets', MARKET_LABELS, groups, 'market');
   }
@@ -102,7 +100,7 @@ export function initSignalStudy() {
       byId('study-status').textContent = data ? '새 검증 자료 조회가 지연되어 마지막 자료를 표시합니다.' : '전체 종목의 신호 이력을 검사하고 있습니다. 완료 후 검증 통계가 표시됩니다.';
     } finally { loading = false; byId('study-refresh').disabled = false; }
   }
-  for (const id of ['study-market', 'study-sector', 'study-type', 'study-regime', 'study-from', 'study-to', 'study-cost']) byId(id).addEventListener('change', draw);
+  for (const id of ['study-market', 'study-sector', 'study-type', 'study-regime', 'study-from', 'study-to']) byId(id).addEventListener('change', draw);
   byId('study-refresh').onclick = load;
   document.querySelectorAll('[data-screen-view]').forEach(button => {
     button.onclick = () => {
