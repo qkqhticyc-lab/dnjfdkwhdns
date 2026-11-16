@@ -16,7 +16,7 @@
 .study-table th{font-weight:500;color:#6b8274}
 .study-table small{display:block;font-size:10px;color:#a56829;margin-top:5px}
 .study-controls input,.study-controls select{min-width:130px;max-width:100%}
-@media(max-width:600px){.study-controls{grid-template-columns:1fr 1fr}.study-controls label:first-child{grid-column:auto}.study-controls label:last-child{grid-column:1/-1}.study-controls input,.study-controls select{min-width:0}}
+@media(max-width:600px){.study-controls{grid-template-columns:1fr 1fr}.study-controls label:first-child{grid-column:auto}.study-controls input,.study-controls select{min-width:0}}
 .screen-rank-help summary{cursor:pointer;color:#2b6e55}
 .screen-rank-help p{line-height:1.8;margin:12px 0}
 .screen-rank-limits{display:flex;gap:12px;flex-wrap:wrap}
