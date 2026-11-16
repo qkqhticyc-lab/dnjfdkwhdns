@@ -1,0 +1,72 @@
+import {buildTradePlan} from './trade-plan.mjs';
+
+export const REVIEW_HORIZON = 10;
+export const REVIEW_MIN_SAMPLES = 20;
+const finite = Number.isFinite;
+const bucket = (value, boundaries) => boundaries.filter(boundary => value >= boundary).length;
+
+function comparisonState(frame) {
+  if (!frame || ![frame.close, frame.ema8, frame.ema21, frame.ema55, frame.rsi, frame.atr].every(finite)
+    || frame.close <= 0 || frame.ema21 <= 0 || frame.atr <= 0) return null;
+  const trend = frame.close > frame.ema21 && frame.ema8 > frame.ema21 && frame.ema21 > frame.ema55 ? 'up'
+    : frame.close < frame.ema21 && frame.ema8 < frame.ema21 && frame.ema21 < frame.ema55 ? 'down' : 'mixed';
+  return {
+    key: [trend, bucket(frame.rsi, [40, 55, 70]), bucket((frame.close - frame.ema21) / frame.atr, [0, 1, 2])].join(':'),
+    volatility: frame.atr / frame.close,
+  };
+}
+
+export function comparableEntryHistory(frames) {
+  const current = frames.at(-1), state = comparisonState(current);
+  const result = {status: 'insufficient', horizon: REVIEW_HORIZON, minimum: REVIEW_MIN_SAMPLES,
+    count: 0, lossCount: 0, drawdownCount: 0, lossRate: null, drawdownRate: null, from: null, through: null,
+    historyFrom: frames[0]?.asOf ?? null, historyThrough: current?.asOf ?? null, provisional: !!current?.provisional};
+  if (!state) return result;
+  let previousEnd = -1;
+  for (let index = 0; index + REVIEW_HORIZON < frames.length - 1; index++) {
+    if (index <= previousEnd) continue;
+    const origin = frames[index], candidate = comparisonState(origin);
+    if (origin.provisional || !candidate || candidate.key !== state.key
+      || candidate.volatility < state.volatility / 2 || candidate.volatility > state.volatility * 2) continue;
+    const path = frames.slice(index + 1, index + REVIEW_HORIZON + 1);
+    if (path.some(bar => bar.provisional || ![bar.close, bar.low, bar.high].every(finite)
+      || bar.low <= 0 || bar.high < bar.low || bar.close < bar.low || bar.close > bar.high)) continue;
+    result.count++;
+    if (path.at(-1).close < origin.close) result.lossCount++;
+    if (Math.min(...path.map(bar => bar.low)) <= origin.close * .95) result.drawdownCount++;
+    result.from ??= origin.asOf;
+    result.through = path.at(-1).asOf;
+    previousEnd = index + REVIEW_HORIZON;
+  }
+  if (result.count >= REVIEW_MIN_SAMPLES) {
+    result.status = 'available';
+    result.lossRate = result.lossCount / result.count * 100;
+    result.drawdownRate = result.drawdownCount / result.count * 100;
+  }
+  return result;
+}
+
+export function buildEntryReview(frames, {maxRiskPct = 8, stale = false, historical = false, quotePrice = null} = {}) {
+  const last = frames.at(-1), plan = buildTradePlan(frames, {maxRiskPct});
+  const review = {status: 'wait', label: '추세 회복 대기', low: null, high: null,
+    basis: last?.close ?? null, asOf: last?.asOf ?? null, provisional: !!last?.provisional,
+    condition: '가격만으로 진입하지 않고 추세와 마감봉 회복을 먼저 확인합니다.',
+    reasons: [...plan.reasons], plan, history: comparableEntryHistory(frames), historical};
+  if (stale) return {...review, status: 'unavailable', label: '시세 갱신 대기', condition: '이전 조회 자료입니다. 새 시세가 확인되면 다시 평가합니다.'};
+  if (!historical && finite(quotePrice) && finite(last?.atr) && Math.abs(quotePrice - last.close) > Math.max(last.close * .005, last.atr * .25))
+    return {...review, status: 'unavailable', label: '가격 동기화 대기', condition: '최신 시세와 차트 마지막 봉 가격의 차이가 커서 현재 진입 판단을 보류합니다.'};
+  if (plan.status === 'unavailable' || !plan.context?.ready) return {...review, status: 'unavailable', label: '판단 자료 부족'};
+  if (plan.context.regime === 'down' || plan.context.rsi < 45) return review;
+  if (plan.status === 'review' && !last.provisional) return {...review, status: 'review', label: '현재 가격대 검토',
+    low: plan.entry, high: plan.entry, condition: '종합 조건을 충족한 마감봉 가격입니다. 주문 전 현재 시세와 손절폭을 다시 확인합니다.'};
+  const aligned = ['up', 'strongUp'].includes(plan.context.regime);
+  const nearDistance = Math.min(plan.atr * 2, plan.entry * maxRiskPct / 100);
+  if (aligned && finite(plan.pullback?.low) && finite(plan.pullback?.high) && plan.pullback.low > 0
+    && plan.entry - plan.support.value <= nearDistance) return {...review, label: plan.support.kind === 'EMA21 참고선' ? '이평선 지지 확인 대기' : '눌림 확인 후 검토',
+    low: plan.pullback.low, high: plan.pullback.high,
+    condition: '이 가격대에서 지지를 지킨 뒤 EMA14 위 마감과 평균 이상 거래량을 확인합니다. 도달 시 손절폭·저항을 다시 계산합니다.'};
+  if (aligned && plan.obstacle && plan.obstacle.value - plan.entry <= nearDistance && !plan.extended && plan.context.rsi < 70) return {...review, label: '저항 돌파·재확인 대기',
+    low: plan.obstacle.value, high: plan.obstacle.value,
+    condition: '이 저항 위 마감과 평균 이상 거래량을 확인하고, 되돌림에서도 지지를 지키는지 봅니다. 확인 후 진입가를 다시 계산합니다.'};
+  return {...review, label: last.provisional ? '마감 확인 대기' : plan.extended || plan.context.rsi >= 70 ? '추격 진입 대기' : '진입 조건 대기'};
+}

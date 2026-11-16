@@ -8,6 +8,7 @@ import{GUIDE_LINES}from'./chart-guide-core.mjs';
 import{STRATEGY_RULES}from'./strategy-core.mjs';
 import{buildTradePlan,PLAN_RULES}from'./trade-plan.mjs';
 import{entrySnapshot}from'./entry-snapshot.mjs';
+import{entryReviewCard}from'./entry-review.js';
 const GUIDE_RULES=STRATEGY_RULES.map(r=>['tp1','tp2'].includes(r.key)?{...r,label:r.key==='tp1'?'과거 신호 TP1 · 1.5R':'과거 신호 TP2 · 2.5R',rule:r.key==='tp1'?'TP1은 신호 당시 초기 위험의 1.5배로 고정합니다. 추세·수렴 진입은 최근 5봉 저점을 참고한 0.75~1.5ATR 위험, 과매도 반등은 해당 구간 저점−0.2ATR의 0.75~2ATR·8% 이내 위험을 씁니다. 진입 다음 봉부터 고가 도달을 확인합니다.':r.rule}:r);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;},ns='http://www.w3.org/2000/svg',svg=(tag,attrs={},text)=>{const n=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,String(v));if(text!=null)n.textContent=text;return n;},num=(v,d=2)=>Number.isFinite(v)?v.toLocaleString('ko-KR',{maximumFractionDigits:d}):'—';
 const viewStates=new Map();
@@ -62,6 +63,7 @@ export function guideView(data,options={}){
   if(frame.sourceThrough)content.append(el('p',(frame.timeframe==='4h'?'분봉 기준 ':'가격·일봉 조회 기준 ')+new Date(frame.sourceThrough).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST · 제공처 지연 가능','guide-note'));
   const candidate=reboundCandidate(guide.frames.slice(0,window.end)),bounce=frames.at(-1).bounce;if(bounce?.state==='watch'){const note=el('div',null,'guide-bounce guide-notice');note.dataset.bounceState='watch';note.append(el('strong',candidate?'반등 후보 구간 · 확인 전':'낙폭 과대 관찰 · 반등 확인 대기'),el('p','관찰 시작 '+when(bounce.asOf,frame)+' · 낙폭 '+num(bounce.dropPct,1)+'% · 관찰 구간 최저 RSI '+num(bounce.minRsi,1)),el('p',bounce.blocked.map(s=>s.replace('RSI 30 회복 및 상승 확인','RSI 30 초과~50 이하에서 상승 확인')).join(' · ')),el('p','진입 신호가 아닙니다. 저점 갱신 중에는 기다리며, 관찰은 최초 조건 충족 후 10봉까지입니다.'));if(candidate){note.dataset.reboundCandidate='true';note.append(el('p','관찰 가격대 '+price(candidate.lower)+' ~ '+price(candidate.upper)+' '+data.currency+' · '+(candidate.newLow?'저점 갱신 중 · 하락 주의':'반등 확인 대기')+' · 매수 권장 가격대가 아닙니다.'));}content.append(note);}
   const trade=frames.at(-1).trade,plan=buildTradePlan(guide.frames.slice(0,window.end),{maxRiskPct:prefs.maxRiskPct}),distance=v=>Number.isFinite(v)?((v/plan.entry-1)*100>=0?'+':'')+num((v/plan.entry-1)*100,2)+'%':'—';
+  if(options.dashboardHost)content.append(entryReviewCard(guide.frames.slice(0,window.end),{currency:data.currency,timeframe:frame.timeframe,stale:frame.status==='stale'||data.status==='stale'||data.quote?.status==='stale',historical:!view.follow,maxRiskPct:prefs.maxRiskPct,quotePrice:data.quote?.price}));
   const signal=entrySnapshot(guide,frames.at(-1).asOf),signalCard=el('div',null,'guide-entry');signalCard.dataset.entryStatus=signal?.status||'none';signalCard.dataset.entryType=signal?.entryType||'none';
   signalCard.append(el('h3',view.follow?'최근 진입 신호':'이 시점까지의 최근 진입 신호'));
   if(signal){
@@ -164,7 +166,7 @@ export function guideView(data,options={}){
   if(options.dashboardHost){
    const opened=[...(options.notesHost?.querySelectorAll('details')||[])].map(d=>d.open);options.dashboardHost.replaceChildren();const more=el('details',null,'guide-more');more.append(el('summary','시세·추세 상세 · 최근 신호'));
    for(const child of [...content.children]){
-    if(child.matches('.guide-latest,.guide-entry,.guide-explanation,.guide-bounce'))options.dashboardHost.append(child);
+    if(child.matches('.guide-latest,.guide-entry,.guide-explanation,.guide-bounce,.guide-entry-review'))options.dashboardHost.append(child);
     else if(child.matches('p.guide-note,.guide-notice,.guide-events'))more.append(child);
    }
    options.notesHost?.replaceChildren();options.settingsHost?.append(methods);options.notesHost?.querySelectorAll('details').forEach((d,i)=>d.open=!!opened[i]);
