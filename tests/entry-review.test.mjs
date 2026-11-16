@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {comparableEntryHistory, buildEntryReview} from '../entry-review-core.mjs';
+import {comparableEntryHistory, buildEntryReview, currentEntryBurden} from '../entry-review-core.mjs';
 
 function samples(count = 20) {
   const frames = [];
@@ -87,4 +87,25 @@ test('qualified close can be reviewed but provisional close cannot', () => {
   assert.equal(review.low, frames.at(-1).close);
   frames.at(-1).provisional = true;
   assert.notEqual(buildEntryReview(frames).status, 'review');
+});
+test('short 4h histories show indicator burden even without historical matches or EMA55', () => {
+  const frames = rising().slice(-25).map(bar => ({...bar, ema55: null}));
+  frames.at(-1).rsi = 76;
+  const review = buildEntryReview(frames);
+  assert.equal(review.history.lossRate, null);
+  assert.equal(review.burden.level, 'high');
+  assert.match(review.burden.factors.map(factor => factor.text).join(' '), /과열/);
+  assert.equal(review.burden.metrics.length, 2);
+});
+test('burden distinguishes normal, caution, high and stale states', () => {
+  const frames = rising();
+  assert.equal(currentEntryBurden(frames, null).level, 'normal');
+  frames.at(-1).rsi = 48;
+  assert.equal(currentEntryBurden(frames, null).level, 'caution');
+  frames.at(-1).rsi = 28;
+  assert.equal(currentEntryBurden(frames, null).level, 'high');
+  assert.equal(currentEntryBurden(frames, null, {stale: true}).level, 'unavailable');
+  assert.equal(currentEntryBurden(frames, null, {quotePrice: 300}).level, 'unavailable');
+  frames.at(-1).atr = null;
+  assert.equal(currentEntryBurden(frames, null).level, 'unavailable');
 });

@@ -37,11 +37,13 @@ try {
     }
     await page.screenshot({path: 'outputs/entry-review-' + width + '.png'});
     await page.evaluate(frames => window.renderReview(frames.slice(-80), {currency: 'KRW', timeframe: '4h'}), sampleFrames);
-    assert.equal(await page.locator('[data-review-metric=loss] strong').textContent(), '판단 보류');
-    assert.match(await page.locator('[data-review-metric=loss]').textContent(), /4시간봉 10개/);
+    assert.equal(await page.locator('[data-review-metric=loss]').count(), 0);
+    assert.match(await page.locator('.entry-review-history-pending').textContent(), /4시간봉 10개/);
+    assert.equal(await page.locator('.entry-review-burden>strong').textContent(), '주의');
     await page.evaluate(frames => window.renderReview(frames, {currency: 'KRW', stale: true}), sampleFrames);
     assert.match(await page.locator('.entry-review-verdict').textContent(), /갱신 대기/);
-    assert.equal(await page.locator('[data-review-metric=loss] strong').textContent(), '판단 보류');
+    assert.equal(await page.locator('[data-review-metric=loss]').count(), 0);
+    assert.equal(await page.locator('.entry-review-burden>strong').textContent(), '시세 갱신 대기');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     let failRefresh = false;
     await page.route('**/functions/v1/stock-chart?**', route => {
@@ -61,12 +63,13 @@ try {
     await page.screenshot({path: 'outputs/entry-review-chart-' + width + '.png'});
     if (width < 1100) await page.locator('#chart-panel-dashboard .chart-panel-heading button').click();
     await page.locator('[data-guide-frame=fourHour]').click();
-    await page.waitForFunction(() => document.querySelector('[data-review-metric=loss]')?.textContent.includes('4시간봉 10개'));
+    await page.waitForFunction(() => document.querySelector('.entry-review-history-pending')?.textContent.includes('4시간봉 10개') || document.querySelector('[data-review-metric=loss]')?.textContent.includes('4시간봉 10개'));
     assert.equal(await page.locator('.guide-entry-review').count(), 1);
     failRefresh = true;
     await page.locator('#chart-refresh').click();
     await page.waitForFunction(() => document.querySelector('.entry-review-verdict')?.textContent === '시세 갱신 대기');
-    assert.equal(await page.locator('[data-review-metric=loss] strong').textContent(), '판단 보류');
+    assert.equal(await page.locator('[data-review-metric=loss]').count(), 0);
+    assert.equal(await page.locator('.entry-review-burden>strong').textContent(), '시세 갱신 대기');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert.deepEqual(errors, []);
     await page.close();

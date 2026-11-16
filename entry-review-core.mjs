@@ -46,12 +46,44 @@ export function comparableEntryHistory(frames) {
   return result;
 }
 
+export function currentEntryBurden(frames, plan, {stale = false, historical = false, quotePrice = null} = {}) {
+  const last = frames.at(-1);
+  const empty = {level: 'unavailable', label: '지표 준비 중', factors: [], metrics: []};
+  if (stale) return {...empty, label: '시세 갱신 대기'};
+  if (!last || ![last.close, last.ema8, last.ema21, last.atr, last.rsi].every(finite)
+    || last.close <= 0 || last.ema21 <= 0 || last.atr <= 0) return empty;
+  if (!historical && finite(quotePrice) && Math.abs(quotePrice - last.close) > Math.max(last.close * .005, last.atr * .25))
+    return {...empty, label: '가격 동기화 대기'};
+  const distance = (last.close / last.ema21 - 1) * 100;
+  const atrPct = last.atr / last.close * 100;
+  const closed = frames.findLast(bar => !bar.provisional);
+  const factors = [];
+  if (last.close < last.ema21 && last.ema8 < last.ema21) factors.push({severe: true, text: '가격과 단기 이평선이 EMA21 아래 · 추세 회복 대기'});
+  else if (last.close < last.ema21 || last.ema8 < last.ema21) factors.push({text: '단기 추세 혼조 · EMA21 회복 확인 필요'});
+  if (last.rsi < 40) factors.push({severe: true, text: 'RSI ' + last.rsi.toFixed(0) + ' · 하락 모멘텀 지속'});
+  else if (last.rsi < 50) factors.push({text: 'RSI ' + last.rsi.toFixed(0) + ' · 상승 모멘텀 약함'});
+  if (last.rsi >= 70) factors.push({severe: true, text: 'RSI ' + last.rsi.toFixed(0) + ' · 과열 구간'});
+  if (last.close - last.ema21 > 2 * last.atr) factors.push({severe: true, text: 'EMA21에서 2ATR 이상 상승 · 추격 진입 부담'});
+  if (atrPct >= 5) factors.push({severe: true, text: '한 봉 ATR ' + atrPct.toFixed(1) + '% · 큰 가격 변동'});
+  else if (atrPct >= 3) factors.push({text: '한 봉 ATR ' + atrPct.toFixed(1) + '% · 변동성 주의'});
+  if (finite(closed?.volumeRatio) && closed.volumeRatio < .8) factors.push({text: '마감 거래량 평균의 ' + closed.volumeRatio.toFixed(1) + '배 · 매수세 확인 필요'});
+  if (finite(plan?.obstacleRr) && plan.obstacleRr < 1.5) factors.push({text: '가까운 저항까지 손익비 ' + plan.obstacleRr.toFixed(2) + ' · 상승 여유 제한'});
+  if (finite(plan?.riskPct) && plan.riskPct > plan.maxRiskPct) factors.push({severe: true, text: '현재 기준 손절폭 ' + plan.riskPct.toFixed(1) + '% · 설정 한도 초과'});
+  const level = factors.some(factor => factor.severe) || factors.length >= 3 ? 'high' : factors.length ? 'caution' : 'normal';
+  return {level, label: {high: '높음', caution: '주의', normal: '보통'}[level], factors,
+    metrics: [
+      {label: 'EMA21 이격', value: (distance > 0 ? '+' : '') + distance.toFixed(1) + '%'},
+      {label: '한 봉 변동폭 · ATR', value: atrPct.toFixed(1) + '%'},
+    ]};
+}
+
 export function buildEntryReview(frames, {maxRiskPct = 8, stale = false, historical = false, quotePrice = null} = {}) {
   const last = frames.at(-1), plan = buildTradePlan(frames, {maxRiskPct});
   const review = {status: 'wait', label: '추세 회복 대기', low: null, high: null,
     basis: last?.close ?? null, asOf: last?.asOf ?? null, provisional: !!last?.provisional,
     condition: '가격만으로 진입하지 않고 추세와 마감봉 회복을 먼저 확인합니다.',
-    reasons: [...plan.reasons], plan, history: comparableEntryHistory(frames), historical};
+    reasons: [...plan.reasons], plan, history: comparableEntryHistory(frames), historical,
+    burden: currentEntryBurden(frames, plan, {stale, historical, quotePrice})};
   if (stale) return {...review, status: 'unavailable', label: '시세 갱신 대기', condition: '이전 조회 자료입니다. 새 시세가 확인되면 다시 평가합니다.'};
   if (!historical && finite(quotePrice) && finite(last?.atr) && Math.abs(quotePrice - last.close) > Math.max(last.close * .005, last.atr * .25))
     return {...review, status: 'unavailable', label: '가격 동기화 대기', condition: '최신 시세와 차트 마지막 봉 가격의 차이가 커서 현재 진입 판단을 보류합니다.'};
