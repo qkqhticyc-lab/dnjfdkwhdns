@@ -33,7 +33,7 @@ export async function collectStudyMarkets(now = new Date(), fetcher = fetch) {
       })).filter(row => [row.open, row.high, row.low, row.close].every(value => Number.isFinite(value) && value > 0));
       const rows = liveDailyRows({ market, timezone: ZONES[market], bars, collectedAt: now.toISOString() }, now).filter(row => !row.provisional);
       if (rows.length < 60) throw Error('Insufficient benchmark history');
-      result[market] = { symbol, status: 'ok', regimes: benchmarkRegimes(rows) };
+      result[market] = { symbol, status: 'ok', asOf: rows.at(-1).asOf, regimes: benchmarkRegimes(rows) };
     } catch {
       result[market] = { symbol, status: 'unavailable', regimes: {} };
     }

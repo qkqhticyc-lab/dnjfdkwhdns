@@ -1,4 +1,5 @@
 import {rankScreenItem, passesRankFilters} from './screener-rank.mjs';
+import {screenMarketDates,screenMarketDateText} from './screener-freshness.mjs';
 import{SECTORS,sectorMatch}from'./sector-core.mjs';
 import{ENTRY_LABELS,screenEntryType}from'./entry-types.mjs';
 import{formatPrice,formatTarget}from'./price-display.mjs';
@@ -44,7 +45,10 @@ export async function initScreener(){let data,sectorData,shown=50,liquidity='sta
   if(mode&&!rows.length)cards.append(el('p',data.candidateRulesVersion===1?'현재 조건에 맞는 반등 전 후보가 없습니다. 기간·거래대금 조건을 확인하세요.':'반등 후보 전체 검사를 진행 중입니다.','screen-info'));
   $('screen-empty').hidden=rows.length>0;$('screen-more').hidden=shown>=rows.length;
   const classified=data.items.filter(p=>p.sector?.id&&p.sector.id!=='unknown').length,stale=data.items.filter(p=>p.sector?.status==='stale').length;$('screen-sector-status').textContent=sectorData?'업종 분류 '+classified.toLocaleString()+' / '+data.items.length.toLocaleString()+'종목 · 미분류 '+(data.items.length-classified).toLocaleString()+'종목'+(stale?' · 이전 분류 유지 '+stale+'종목':'')+' · 분류 조회 '+new Date(sectorData.collectedAt).toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul'}):'업종 분류 자료 연결 지연 · 전체 검색은 계속 사용할 수 있습니다.';
-  $('screen-updated').textContent='수집 '+new Date(data.collectedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST · 하루 2회 전체 검사 · 진행 봉 제외 · 각 시장의 최근 마감 일봉';
+  $('screen-updated').textContent='검사 시작 '+new Date(data.collectedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST'+(data.completedAt?' · 완료 '+new Date(data.completedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST':'')+' · 진행 봉 제외';
+  let marketDates=$('screen-market-updated');if(!marketDates){marketDates=el('p',null,'screen-info');marketDates.id='screen-market-updated';$('screen-updated').after(marketDates);}
+  const references=Object.fromEntries((data.marketDates||[]).map(summary=>[summary.market,{status:'ok',asOf:summary.reference}]));marketDates.textContent='시장별 최근 분석일 · '+screenMarketDateText(screenMarketDates(data.items,references));
+  let schedule=$('screen-schedule');if(!schedule){schedule=el('p','자동 전체검사 예정(KST) · 한국·일본 장 마감 후 15:45·16:45 · 미국 장 마감 전후 다음날 05:15·06:15·07:15. 미국 서머타임에 따라 마감 시각이 달라지며 진행 봉은 제외합니다. 검사·배포 및 실행 대기 시간이 추가됩니다.','screen-info');schedule.id='screen-schedule';marketDates.after(schedule);}
   $('screen-coverage').textContent=(data.universeScope==='all-provider-listed'?'전체 목록 수집: ':'전체 목록 첫 검사 준비 중 · 이전 제한 목록: ')+data.coverage.map(g=>g.label+' '+g.requested.toLocaleString()+'개'+(g.status!=='ok'?' (목록 수집 지연)':'')).join(' / ');
   const failures=data.items.filter(p=>p.status!=='ok').length,late=Date.now()-Date.parse(data.collectedAt)>30*3600000;$('screen-warning').textContent=(late?'수집이 30시간 이상 지연되었습니다. ':'')+(failures?failures+'종목은 조회 지연·자료 부족으로 결과에서 제외했습니다. ':'')+(data.candidateRulesVersion!==1?'반등 전 후보 전체 재검사 중입니다. 후보 검색은 완료 후 반영됩니다. ':'')+(data.bounceRulesVersion!==1?'과매도 반등 전체 재검사 중입니다. 해당 유형은 검사 완료 후 반영됩니다. ':'')+(data.patternRulesVersion!==1?'새 패턴 전체 재검사 중입니다. 삼각수렴·박스권 검색 결과는 완료 후 반영됩니다. ':'')+(data.items.some(p=>p.signal&&!p.signal.entryType)?'눌림·회복 유형 재집계 중입니다. 미분류 기록은 전체 유형에서 확인하세요. ':'')+(data.coverage.some(p=>p.status==='stale')?'일부 거래소는 이전 종목 목록으로 시세를 다시 분석했습니다. 신규 상장은 다음 목록 갱신에 반영됩니다. ':'')+(data.coverage.some(p=>p.status==='unavailable')?'일부 거래소 목록 조회 실패. ':'');
  }
