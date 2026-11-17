@@ -7,3 +7,13 @@ test('current quotes validate original listing, country, currency counter, value
  const fetcher=async u=>({ok:true,json:async()=>u.includes('autocomplete')?{result:{items:[item]}}:basic});const q=await getJournalQuote({market:'HK',symbol:'00700',currency:'HKD'},fetcher);assert.equal(q.price,383.6);assert.equal(q.currency,'HKD');assert.equal(q.asOf,basic.localTradedAt);assert.equal(q.delayMinutes,15);await assert.rejects(getJournalQuote({market:'HK',symbol:'00700',currency:'CNY'},fetcher),/Currency/);basic.closePrice='0';await assert.rejects(getJournalQuote({market:'HK',symbol:'00700'},fetcher),/Invalid quote/);assert.equal(validQuoteItem({market:'US',symbol:'../../key'}),false);
 });
 test('holding snapshots support Korean preferred shares and label average cost returns',()=>{assert.equal(validQuoteItem({market:'KR',symbol:'33626K',currency:'KRW'}),true);const result=journalReturn({...buy,source:'holding'},quote);assert.ok(result.label.includes('평균매수가'));assert.ok(Math.abs(result.value-20)<1e-10);});
+
+test('watchlist quotes expose official signed day changes and preserve missing percentages',async()=>{
+ const listing={category:'stock',nationCode:'USA',code:'AMD',reutersCode:'AMD.O',name:'AMD'};
+ const basic={reutersCode:'AMD.O',symbolCode:'AMD',stockExchangeType:{nationCode:'USA',delayTime:15},closePrice:'100',localTradedAt:'2026-11-16T16:00:00-05:00',fluctuationsRatio:'1.25',compareToPreviousPrice:{code:'5'}};
+ const fetcher=async url=>({ok:true,json:async()=>url.includes('autocomplete')?{result:{items:[listing]}}:basic});
+ assert.equal((await getJournalQuote({market:'US',symbol:'AMD'},fetcher)).changePercent,-1.25);
+ basic.compareToPreviousPrice.code='2';assert.equal((await getJournalQuote({market:'US',symbol:'AMD'},fetcher)).changePercent,1.25);
+ basic.fluctuationsRatio='0';basic.compareToPreviousPrice.code='3';assert.equal((await getJournalQuote({market:'US',symbol:'AMD'},fetcher)).changePercent,0);
+ delete basic.fluctuationsRatio;assert.equal((await getJournalQuote({market:'US',symbol:'AMD'},fetcher)).changePercent,null);
+});

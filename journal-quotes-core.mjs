@@ -1,3 +1,4 @@
+import {normalizeChartQuote} from './chart-price.mjs';
 const markets={KR:{nation:'KOR',currency:'KRW'},US:{nation:'USA',currency:'USD'},HK:{nation:'HKG',currency:'HKD'},JP:{nation:'JPN',currency:'JPY'}};
 export function validQuoteItem(item){return !!item&&!!markets[item.market]&&typeof item.symbol==='string'&&({KR:/^[0-9A-Z]{6}$/,US:/^[A-Z][A-Z0-9.-]{0,19}$/,HK:/^\d{4,5}$/,JP:/^[A-Z0-9]{4,5}$/}[item.market]).test(item.symbol)&&(!item.currency||({KR:['KRW'],US:['USD'],HK:['HKD','CNY','USD'],JP:['JPY']}[item.market]).includes(item.currency));}
 export async function getJournalQuote(request,fetcher=fetch){
@@ -11,5 +12,6 @@ export async function getJournalQuote(request,fetcher=fetch){
  if(d.reutersCode!==code||(market==='KR'?d.itemCode:d.symbolCode)!==symbol||d.stockExchangeType?.nationCode!==definition.nation)throw Error('Quote identity mismatch');
  const raw=d.closePrice,price=typeof raw==='number'?raw:typeof raw==='string'&&/^[\d,]+(?:\.\d+)?$/.test(raw)?Number(raw.replaceAll(',','')):NaN;
  if(!Number.isFinite(price)||price<=0||price>=1e12||!Number.isFinite(Date.parse(d.localTradedAt)))throw Error('Invalid quote');
- return{market,symbol,currency,status:'ok',price,asOf:d.localTradedAt,delayMinutes:Number.isFinite(d.delayTime)?d.delayTime:Number.isFinite(d.stockExchangeType.delayTime)?d.stockExchangeType.delayTime:null,marketStatus:d.marketStatus||'UNKNOWN',collectedAt:new Date().toISOString()};
+ const quote=normalizeChartQuote(d,{market,symbol,providerSymbol:code,currency});
+ return{market,symbol,currency,status:'ok',price,changePercent:quote.changePercent,asOf:d.localTradedAt,delayMinutes:quote.delayMinutes,marketStatus:d.marketStatus||'UNKNOWN',collectedAt:new Date().toISOString()};
 }

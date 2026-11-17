@@ -1,7 +1,8 @@
 import{WATCH_KEY,watchItem,watchKey,mergeWatchlist,parseWatchlist}from'./watchlist-core.mjs';
 import {initChartStockPicker} from './chart-stock-picker.js';
+import {initWatchlistQuotes,watchQuoteText} from './watchlist-quotes.js';
 const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;return n;},button=(text,run)=>{const b=node('button',text);b.type='button';b.onclick=run;return b;};
-export function initChartWorkspace({select,embedded=false}){
+export function initChartWorkspace({select,embedded=false,config}){
  if(embedded)return initEmbeddedWorkspace({select});
  const main=document.querySelector('main'),form=document.getElementById('chart-search-form'),chart=document.querySelector('.stock-chart-panel'),intro=document.querySelector('.page-intro');intro?.remove();
  const workspace=node('div',null,'chart-workspace');workspace.id='chart-workspace';main.insertBefore(workspace,form);const sidebar=node('aside',null,'chart-sidebar');workspace.append(sidebar,chart);chart.classList.add('chart-center');
@@ -14,6 +15,19 @@ export function initChartWorkspace({select,embedded=false}){
  const watch=panel('watchlist','관심종목',sidebar);const storageNote=node('p','이 브라우저에 저장합니다. 기기·브라우저 이전은 내보내기 파일을 사용하세요.','chart-storage-note');watch.append(storageNote);const status=node('p',null,'chart-watch-status');status.id='chart-watch-status';status.setAttribute('role','status');watch.append(status);const list=node('div',null,'chart-watch-list');list.id='chart-watch-list';watch.append(list);
  const transfer=node('div',null,'chart-watch-transfer'),file=node('input');file.type='file';file.accept='application/json,.json';file.hidden=true;file.id='chart-watch-import';
  let items=[],current=null;try{const raw=localStorage.getItem(WATCH_KEY);if(raw)items=parseWatchlist(raw);}catch{status.textContent='저장 목록을 읽지 못했습니다. 이 창에서는 관심종목을 계속 사용할 수 있습니다.';}
+ const watchQuotes=initWatchlistQuotes(config,(key,quote)=>{
+  const pick=[...list.querySelectorAll('[data-watch-select]')].find(button=>button.dataset.watchSelect===key);
+  if(pick)showQuote(pick,quote);
+ });
+ function showQuote(pick,quote){
+  const value=pick.querySelector('.chart-watch-change');
+  value.textContent=watchQuoteText(quote);
+  value.dataset.direction=Number.isFinite(quote?.changePercent)?quote.changePercent>0?'up':quote.changePercent<0?'down':'flat':'unknown';
+  value.dataset.stale=String(quote?.status==='stale');
+  const time=quote?.asOf?new Date(quote.asOf).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false})+' KST':'';
+  value.title='전일 종가 대비 '+watchQuoteText(quote)+(time?' · 시세 '+time:' · 시세 확인 중')+(quote?.delayMinutes>0?' · '+quote.delayMinutes+'분 지연':'')+(quote?.status==='stale'?' · 이전 조회 자료':'');
+  value.setAttribute('aria-label',value.title);
+ }
  function persist(){try{localStorage.setItem(WATCH_KEY,JSON.stringify({schemaVersion:1,items}));status.textContent='관심종목 '+items.length+'개 · 이 브라우저에 저장됨';}catch{status.textContent='브라우저 저장이 차단되어 이 창에서만 유지됩니다. 내보내기로 보관하세요.';}window.dispatchEvent(new CustomEvent('investment-watchlist-change',{detail:{items}}));}
  function render(){
   list.replaceChildren();
@@ -26,12 +40,15 @@ export function initChartWorkspace({select,embedded=false}){
    pick.title=item.name+' · '+item.symbol+' · '+item.market;
    pick.setAttribute('aria-label',pick.title);
    pick.append(node('span',item.market==='US'?item.symbol:item.name,'chart-watch-name'),node('small',item.market,'chart-watch-market'));
+   pick.append(node('span','—','chart-watch-change'));
+   showQuote(pick,watchQuotes.get(item));
    const remove=button('×',()=>{items=items.filter(value=>watchKey(value)!==watchKey(item));persist();render();});
    remove.setAttribute('aria-label',item.name+' 관심종목 삭제');
    row.append(pick,remove);
    list.append(row);
   }
   updateStar();
+  watchQuotes.setItems(items);
  }
  function exportList(){const url=URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1,items},null,2)],{type:'application/json'})),a=node('a');a.href=url;a.download='investment-watchlist.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  transfer.append(button('내보내기',exportList),button('가져오기',()=>file.click()),file);watch.append(transfer);
@@ -51,7 +68,7 @@ export function initChartWorkspace({select,embedded=false}){
  function open(key){close(false);if(!media.matches&&!document.body.classList.contains('chart-focus'))return;previousFocus=document.activeElement;const p=panels.get(key);opened=p;p.dataset.open='true';p.dataset.sheetSize='normal';p.setAttribute('role','dialog');p.setAttribute('aria-modal','true');dock.querySelector('[data-workspace-open='+key+']').setAttribute('aria-expanded','true');backdrop.hidden=false;document.body.classList.add('chart-sheet-open');p.querySelector('button,input,select')?.focus({preventScroll:true});}
  document.addEventListener('keydown',e=>{if(!opened)return;if(e.key==='Escape'){e.preventDefault();close();}if(e.key==='Tab'){const focus=[...opened.querySelectorAll('button,input,select,summary,a[href]')].filter(n=>!n.disabled&&n.getClientRects().length),first=focus[0],last=focus.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}});media.addEventListener('change',()=>close());document.body.append(backdrop,dock);render();
  window.addEventListener('storage',e=>{if(e.key!==WATCH_KEY)return;try{items=e.newValue?parseWatchlist(e.newValue):[];render();status.textContent='다른 탭의 관심종목 변경을 반영했습니다.';}catch{}});
- return {setCurrent,closeSearch:picker.close,clear(){dashboard.replaceChildren();notes.replaceChildren();display.replaceChildren();navigation.replaceChildren();document.querySelector('.chart-controls>.guide-controls')?.remove();},dashboardHost:dashboard,notesHost:notes,settingsHost:display,navigationHost:navigation,open};
+ return {updateQuote:watchQuotes.update,setCurrent,closeSearch:picker.close,clear(){dashboard.replaceChildren();notes.replaceChildren();display.replaceChildren();navigation.replaceChildren();document.querySelector('.chart-controls>.guide-controls')?.remove();},dashboardHost:dashboard,notesHost:notes,settingsHost:display,navigationHost:navigation,open};
 }
 function initEmbeddedWorkspace({select}){
  document.body.classList.add('chart-embedded');document.querySelector('header')?.remove();document.querySelector('footer')?.remove();document.querySelector('.page-intro')?.remove();document.querySelector('.chart-analysis-section')?.remove();
