@@ -15,7 +15,24 @@ export function initChartWorkspace({select,embedded=false}){
  const transfer=node('div',null,'chart-watch-transfer'),file=node('input');file.type='file';file.accept='application/json,.json';file.hidden=true;file.id='chart-watch-import';
  let items=[],current=null;try{const raw=localStorage.getItem(WATCH_KEY);if(raw)items=parseWatchlist(raw);}catch{status.textContent='저장 목록을 읽지 못했습니다. 이 창에서는 관심종목을 계속 사용할 수 있습니다.';}
  function persist(){try{localStorage.setItem(WATCH_KEY,JSON.stringify({schemaVersion:1,items}));status.textContent='관심종목 '+items.length+'개 · 이 브라우저에 저장됨';}catch{status.textContent='브라우저 저장이 차단되어 이 창에서만 유지됩니다. 내보내기로 보관하세요.';}window.dispatchEvent(new CustomEvent('investment-watchlist-change',{detail:{items}}));}
- function render(){list.replaceChildren();if(!items.length)list.append(node('p','차트 제목 옆 ☆를 눌러 종목을 추가하세요.','chart-watch-empty'));for(const i of items){const row=node('div',null,'chart-watch-row'),pick=button(i.name,()=>{select(i);setCurrent(i);if(media.matches)close();});pick.dataset.watchSelect=watchKey(i);pick.setAttribute('aria-pressed',String(current&&watchKey(current)===watchKey(i)));pick.append(node('small',i.symbol+' · '+i.market));const remove=button('×',()=>{items=items.filter(v=>watchKey(v)!==watchKey(i));persist();render();});remove.setAttribute('aria-label',i.name+' 관심종목 삭제');row.append(pick,remove);list.append(row);}updateStar();}
+ function render(){
+  list.replaceChildren();
+  if(!items.length)list.append(node('p','차트 제목 옆 ☆를 눌러 종목을 추가하세요.','chart-watch-empty'));
+  for(const item of items){
+   const row=node('div',null,'chart-watch-row');
+   const pick=button(null,()=>{select(item);setCurrent(item);if(media.matches)close();});
+   pick.dataset.watchSelect=watchKey(item);
+   pick.setAttribute('aria-pressed',String(current&&watchKey(current)===watchKey(item)));
+   pick.title=item.name+' · '+item.symbol+' · '+item.market;
+   pick.setAttribute('aria-label',pick.title);
+   pick.append(node('span',item.market==='US'?item.symbol:item.name,'chart-watch-name'),node('small',item.market,'chart-watch-market'));
+   const remove=button('×',()=>{items=items.filter(value=>watchKey(value)!==watchKey(item));persist();render();});
+   remove.setAttribute('aria-label',item.name+' 관심종목 삭제');
+   row.append(pick,remove);
+   list.append(row);
+  }
+  updateStar();
+ }
  function exportList(){const url=URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1,items},null,2)],{type:'application/json'})),a=node('a');a.href=url;a.download='investment-watchlist.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  transfer.append(button('내보내기',exportList),button('가져오기',()=>file.click()),file);watch.append(transfer);
  file.onchange=async()=>{try{const f=file.files?.[0];if(!f)return;if(f.size>256000)throw Error('파일이 너무 큽니다.');const next=mergeWatchlist(items,parseWatchlist(await f.text()));items=next;persist();render();}catch(e){status.textContent='가져오기 실패: '+(e instanceof SyntaxError?'파일 형식을 확인해 주세요.':e.message||'파일을 확인해 주세요.');}finally{file.value='';}};
