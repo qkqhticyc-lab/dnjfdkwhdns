@@ -1,4 +1,5 @@
 import{mergeThreeDay,retainHistory}from'./indicator-history.mjs';
+import {priceCrosshair} from './chart-crosshair.js';
 import {INDICATORS} from './quotes-core.mjs';
 import {retainLiveItems} from './live-indicators-core.mjs';
 const num=(n,d=2)=>Number.isFinite(n)?n.toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d}):'—',sign=(n,d=2)=>Number.isFinite(n)?(n>0?'+':'')+num(n,d):'—';
@@ -29,7 +30,7 @@ export async function initIndicators(config){
     const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',points.map((p,i)=>(i?'L':'M')+(2+(p.x-minX)/(maxX-minX||1)*296).toFixed(2)+','+(65-(p.value-low)/span*57).toFixed(2)).join(' '));path.setAttribute('fill','none');path.setAttribute('stroke',points.at(-1).value>=points[0].value?'#ce4149':'#3376ce');path.setAttribute('stroke-width','2');svg.append(path);
     if(mode==='day'){const groups=[];points.forEach((p,i)=>{if(!i||p.at.slice(0,8)!==points[i-1].at.slice(0,8))groups.push(i);});for(const i of groups){const xx=2+(points[i].x-minX)/(maxX-minX||1)*296;if(i){const line=document.createElementNS(svg.namespaceURI,'line');for(const[k,v]of Object.entries({x1:xx,x2:xx,y1:3,y2:67,stroke:'#9caaa5','stroke-dasharray':'3 3','data-day-boundary':''}))line.setAttribute(k,v);svg.append(line);}const label=document.createElementNS(svg.namespaceURI,'text');label.setAttribute('x',Math.min(265,xx+2));label.setAttribute('y','79');label.setAttribute('font-size','9');label.setAttribute('fill','#687c74');label.textContent=points[i].at.slice(4,6)+'/'+points[i].at.slice(6,8);svg.append(label);}card.append(el('p','차트 시작 대비 '+sign((points.at(-1).value/points[0].value-1)*100)+'% · '+groups.length+'개 날짜','indicator-note'));}
 
-    if(points.length===1){const dot=document.createElementNS(svg.namespaceURI,'circle');dot.setAttribute('cx','2');dot.setAttribute('cy','65');dot.setAttribute('r','3');dot.setAttribute('fill','#3376ce');svg.append(dot);}card.append(svg);
+    if(points.length===1){const dot=document.createElementNS(svg.namespaceURI,'circle');dot.setAttribute('cx','2');dot.setAttribute('cy','65');dot.setAttribute('r','3');dot.setAttribute('fill','#3376ce');svg.append(dot);}priceCrosshair(svg,{left:2,right:298,top:8,bottom:65,min:low,max:low+span,format:value=>num(value,def.digits)+(def.kind==='yield'?'%':'')});card.append(svg);
     if(mode==='day'){
      card.append(el('p',(series?.provider==='yahoo'?'Yahoo 5분봉 · 30분 수집 보완 · 현재 시세와 별도 출처':'네이버 분봉')+(series?.status==='stale'?' · 과거 구간 갱신 지연':''),'indicator-note'));
      card.append(el('p',`분봉 ${localLabel(points[0].at)} ~ ${localLabel(points.at(-1).at)} · 현지시간`,'indicator-note'));

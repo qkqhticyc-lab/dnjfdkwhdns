@@ -1,4 +1,5 @@
 import {creditRatio,creditWindow,validateCreditData} from './credit-core.mjs';
+import {priceCrosshair} from './chart-crosshair.js';
 const $=id=>document.getElementById(id),money=n=>(n/10000).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})+'조원',pct=n=>n.toFixed(2)+'%',dateText=s=>s.replaceAll('-','.'),signed=(n,unit)=>`${n>0?'+':''}${n.toLocaleString('ko-KR',{maximumFractionDigits:2})}${unit}`;
 const series=[{key:'deposit',label:'고객예탁금',color:'#48c7d7',value:p=>p.deposit/10000,unit:'조원'},{key:'credit',label:'신용융자 잔고',color:'#ffbf59',value:p=>p.credit/10000,unit:'조원'},{key:'ratio',label:'신용융자 / 예탁금',color:'#b59bfa',value:creditRatio,unit:'%'}];
 export async function initCredit(){
@@ -18,6 +19,7 @@ export async function initCredit(){
   add('path',{d:points.map((p,i)=>(i?'L':'M')+x(p).toFixed(2)+','+y(s.value(p)).toFixed(2)).join(' '),fill:'none',stroke:s.color,'stroke-width':2.5,'stroke-linecap':'round','stroke-linejoin':'round','vector-effect':'non-scaling-stroke'});
   add('line',{'data-cursor':'',x1:right,x2:right,y1:32,y2:218,stroke:'#6e8194','stroke-dasharray':'4 5'});add('circle',{cx:right,cy:y(values.at(-1)),r:4.5,fill:s.color,stroke:'#101923','stroke-width':2});
   svg.addEventListener('pointermove',event=>{const rect=svg.getBoundingClientRect(),relative=Math.max(0,Math.min(1,((event.clientX-rect.left)/rect.width*width-68)/span)),time=start+relative*(end-start);let index=0;for(let i=1;i<points.length;i++)if(Math.abs(Date.parse(points[i].date)-time)<Math.abs(Date.parse(points[index].date)-time))index=i;choose(index);});
+  priceCrosshair(svg,{left:68,right,top:38,bottom:214,min,max,format:value=>value.toFixed(2)+s.unit});
   node.replaceChildren(svg);$('credit-range-'+s.key).textContent=`기간 최저 ${low.toFixed(2)}${s.unit} · 최고 ${high.toFixed(2)}${s.unit} · 기간 변화 ${signed(values.at(-1)-values[0],s.key==='ratio'?'%p':s.unit)}`;
  }
  function render(){

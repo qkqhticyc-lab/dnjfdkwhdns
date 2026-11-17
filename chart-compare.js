@@ -1,4 +1,5 @@
 import { comparisonItem, comparisonKey, comparisonItems, normalizeComparisonHistory, comparisonSeries, validComparisonDate } from "./chart-compare-core.mjs";
+import {priceCrosshair} from './chart-crosshair.js';
 import { formatPrice } from "./price-display.mjs";
 const $ = (id) => document.getElementById(id), el = (tag, text, cls) => {
   const n = document.createElement(tag);
@@ -201,6 +202,7 @@ async function initChartCompare(config) {
         choose(e.key === "Home" ? 0 : e.key === "End" ? dates.length - 1 : selected + (e.key === "ArrowLeft" ? -1 : 1));
       }
     };
+    priceCrosshair(svg, {left, right: width - right, top, bottom: height - bottom, min, max, format: value => value.toFixed(2) + '%'});
     host.append(svg);
   }
   function closeSearch() {

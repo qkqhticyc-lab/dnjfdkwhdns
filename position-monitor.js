@@ -1,4 +1,5 @@
 import {validatePositionMonitor,filterShortRows,filterOptionsRows,optionSideSurge} from './position-monitor-core.mjs';
+import {priceCrosshair} from './chart-crosshair.js';
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),number=n=>n==null?'—':n.toLocaleString('ko-KR',{maximumFractionDigits:0}),signed=n=>n==null?'—':(n>0?'+':'')+number(n),percent=n=>n==null?'비교 불가':(n>0?'+':'')+n.toFixed(1)+'%',money=n=>n==null?'—':n>=1e12?(n/1e12).toFixed(2)+'조원':(n/1e8).toLocaleString('ko-KR',{maximumFractionDigits:1})+'억원',multiple=n=>n==null?'—':n.toFixed(2)+'배';
 const chartLink=(s,m)=>'./charts.html?market='+m+'&symbol='+encodeURIComponent(s);
 function graph(node,points,series,label){
@@ -8,6 +9,7 @@ function graph(node,points,series,label){
  for(let i=0;i<points.length;i++)if(i===0||i===points.length-1||i%5===0)content+=`<line x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${h-bottom}" stroke="#dce5df" stroke-dasharray="3 5"/><text x="${x(i)}" y="${h-10}" text-anchor="${i===0?'start':i===points.length-1?'end':'middle'}">${points[i].date.slice(5).replace('-','/')}</text>`;
  for(const s of series)content+=`<path d="${points.map((p,i)=>(i?'L':'M')+x(i).toFixed(2)+','+y(p[s.key]/s.divisor).toFixed(2)).join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.4" stroke-linejoin="round"/>`+points.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p[s.key]/s.divisor)}" r="4" fill="transparent"><title>${esc(p.date+' · '+s.name+' '+number(p[s.key])+(s.divisor===1e12?'원':'계약'))}</title></circle>`).join('');
  node.innerHTML=`<div class="pm-legend">${series.map(s=>`<span style="--series:${s.color}">${s.name}</span>`).join('')}<small>${esc(label)}</small></div><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label+' · '+points[0].date+'부터 '+points.at(-1).date+'까지')}">${content}</svg>`;
+ priceCrosshair(node.querySelector('svg'),{left,right:w-right,top,bottom:h-bottom,min,max,format:value=>value.toLocaleString('ko-KR',{maximumFractionDigits:2})});
 }
 export function initPositionMonitor(){
  if(!$('position-monitor'))return;
