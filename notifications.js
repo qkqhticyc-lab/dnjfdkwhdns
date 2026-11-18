@@ -49,7 +49,7 @@ export function initNotifications() {
     field.append(input, document.createTextNode(label)); settings.append(field); settingsInputs.set(kind, input);
     input.onchange = () => { state.settings[kind] = input.checked; state.settingsAt = Date.now(); persist(); render(); refresh(); };
   }
-  const note = node('p', '관심종목·알림·읽음 상태는 이 브라우저에 저장합니다. 추적 시작 이후의 일봉 확정 신호를 하루 2회 전체 검사로 확인하며, 페이지를 여는 동안 2분마다 새 배포를 조회합니다. 실적 일정은 제공처 등록 기준입니다. 최근 30일 최대 200건을 보관합니다.', 'notification-note');
+  const note = node('p', '관심종목·알림·읽음 상태는 이 브라우저에 저장합니다. 추적 시작 이후의 일봉 확정 신호를 장 마감 후 전체 검사로 확인하며, 페이지를 여는 동안 2분마다 새 배포를 조회합니다. 실적 일정은 제공처 등록 기준입니다. 최근 30일 최대 200건을 보관합니다.', 'notification-note');
   const link = node('a', '관심종목 관리 →'); link.href = './charts.html'; link.className = 'notification-watch-link';
   panel.append(heading, toolbar, status, list, more, settings, note, link); document.body.append(panel);
 
@@ -79,6 +79,7 @@ export function initNotifications() {
     if (!items.length) list.append(node('p', watchlist.length ? '새 알림이 없습니다. 관심종목의 다음 신호부터 표시합니다.' : '차트에서 ☆를 눌러 관심종목을 등록하면 알림을 받을 수 있습니다.', 'notification-empty'));
     more.hidden = items.length <= visibleLimit; markAll.disabled = unread === 0;
     if (storageFailed) status.textContent = '브라우저 저장이 차단되어 이 창에서 알림을 유지하고 있습니다.';
+    window.dispatchEvent(new Event('investment-notifications-change'));
   }
 
   function position() {
@@ -166,6 +167,7 @@ export function initNotifications() {
     generation++; watchlist = items; state = syncNotificationWatchlist(state, watchlist); persist(); render(); refresh();
   }
   window.addEventListener('investment-watchlist-change', event => watchChanged(event.detail?.items || readWatchlist()));
+  window.addEventListener('investment-notification-read',event=>{if(!state.items.some(item=>item.id===event.detail?.id))return;state.items=state.items.map(item=>item.id===event.detail.id?{...item,readAt:Date.now()}:item);persist();render();});
   window.addEventListener('storage', event => {
     if (event.key === WATCH_KEY) watchChanged();
     if (event.key === NOTIFICATION_KEY) {
