@@ -67,7 +67,7 @@ export async function initLounge(config){
     metric('지수 이동평균','마감 지수의 20·60일선 기준',trend.ma60===null?'자료 부족':(trend.close>trend.ma20?'20일선 위':'20일선 아래')+' · '+(trend.close>trend.ma60?'60일선 위':'60일선 아래'));
     metric('상승 정렬 비중','유동성 기준 통과 '+snapshot.rows.length.toLocaleString()+'종목 표본',snapshot.breadth===null?'—':snapshot.breadth.toFixed(0)+'%');
     const vix=current('vix');metric('VIX · 미국 변동성 지수',vix?.quoteAt?'시세 '+meta(vix.quoteAt,vix.status==='stale'):'일봉 '+(vix?.asOf||'미제공'),number(vix?.price));
-    metric('최근 확정 진입','해당 시장 최근 3개 마감봉 · 유동성 기준',snapshot.new.length+'종목');
+    metric('당일 확정 진입','기준일 당일 마감봉 · 유동성 기준',snapshot.new.length+'종목');
   }
 
   function stockRow(item,detail,quote){
@@ -78,10 +78,10 @@ export async function initLounge(config){
   function renderSignals(){
     const snapshot=stocks(),host=$('lounge-signal-list');host.replaceChildren();
     for(const button of document.querySelectorAll('[data-lounge-state]')){const key=button.dataset.loungeState;button.textContent=({new:'최근 신호',active:'추적 중',setup:'셋업'})[key]+' '+snapshot[key].length;button.setAttribute('aria-pressed',String(key===view));}
-    $('lounge-screen-basis').textContent=(snapshot.asOf||'기준일 미제공')+' 마감 일봉 · 최근 신호는 3봉 이내 · 유동성 기준 적용';
+    $('lounge-screen-basis').textContent=(snapshot.asOf||'기준일 미제공')+' 마감 일봉 · 최근 신호는 당일봉만 · 유동성 기준 적용';
     $('lounge-screen-link').href='./screener.html?market='+market;
-    for(const item of snapshot[view].slice(0,4)){const type=screenEntryType(item.signal),detail=view==='setup'?'이평선 정렬 셋업 · 확정 진입 대기':(ENTRY_LABELS[type]||'진입')+' · '+item.signal.age+'봉 전'+(item.priority?' · 우선순위 '+item.priority.score+'점':'');host.append(stockRow(item,detail));}
-    if(!snapshot[view].length)empty(host,data.screener?'선택한 유형에 맞는 종목이 없습니다. 진입필터에서 조건을 조정하세요.':'진입필터 자료를 확인하고 있습니다.');
+    for(const item of snapshot[view].slice(0,4)){const type=screenEntryType(item.signal),detail=view==='setup'?'이평선 정렬 셋업 · 확정 진입 대기':(ENTRY_LABELS[type]||'진입')+' · '+(item.signal.age===0?'당일봉':item.signal.age+'봉 전')+(item.priority?' · 우선순위 '+item.priority.score+'점':'');host.append(stockRow(item,detail));}
+    if(!snapshot[view].length)empty(host,data.screener?view==='new'?'기준일 당일봉에 발생한 진입 신호가 없습니다.':'선택한 유형에 맞는 종목이 없습니다. 진입필터에서 조건을 조정하세요.':'진입필터 자료를 확인하고 있습니다.');
   }
 
   function renderCalendar(){

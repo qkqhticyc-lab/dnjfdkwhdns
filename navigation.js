@@ -1,5 +1,6 @@
 export function initNavigation(config){
  const nav=document.querySelector('header nav'),path=location.pathname.split('/').pop()||'index.html',groups=[];
+ const brand=document.querySelector('header .brand');if(brand){brand.href='./lounge.html';brand.title='시장 한눈에로 이동';if(path==='lounge.html')brand.setAttribute('aria-current','page');else brand.removeAttribute('aria-current');}
  function link(file,label){const a=document.createElement('a');a.href='./'+file;a.textContent=label;if(path===file)a.setAttribute('aria-current','page');return a;}
  function closeAll(except){for(const g of groups)if(g!==except)g.set(false);}
  function group(id,label,items){const host=document.createElement('div'),button=document.createElement('button'),menu=document.createElement('div');host.className='nav-group';button.type='button';button.className='nav-group-button';button.textContent=label+' ⌄';button.setAttribute('aria-expanded','false');button.setAttribute('aria-controls','nav-'+id);menu.id='nav-'+id;menu.className='nav-submenu';menu.hidden=true;for(const[file,text]of items)menu.append(link(file,text));if(items.some(([file])=>file===path))button.classList.add('is-current');let timer,hoverOpened=false;
@@ -9,7 +10,7 @@ export function initNavigation(config){
   host.onfocusout=()=>setTimeout(()=>{if(!host.contains(document.activeElement))g.set(false);},0);host.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();g.set(false);button.focus();}else if(e.target===button&&['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();closeAll(g);g.set(true);(e.key==='ArrowDown'?menu.firstElementChild:menu.lastElementChild)?.focus();}};
   host.append(button,menu);nav.append(host);
  }
- nav.replaceChildren(link('index.html','시장 현황'),link('lounge.html','한눈에'),link('charts.html','차트'),link('chart-compare.html','차트비교'),link('screener.html','진입필터'));
+ nav.replaceChildren(link('index.html','시장 현황'),link('charts.html','차트'),link('chart-compare.html','차트비교'),link('screener.html','진입필터'));
  group('references','참고자료',[['etfs.html','ETF 도우미'],['reports.html','리포트'],['news.html','뉴스']]);nav.append(link('credit.html','신용잔고'));
  group('journals','매매일지',[['club.html','정버핏모임'],['community.html','나의 반성일기'],['journals.html','당신들의 반성일기']]);
  const account=document.createElement('a');account.href=config.privateJournalUrl;account.textContent='계좌 매매일지 🔒';account.dataset.private='';account.hidden=true;nav.append(account);

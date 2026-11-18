@@ -10,7 +10,7 @@ export function loungeStocks(items,market,type='all') {
   const active=rows.filter(item=>item.signal?.status==='active');
   const matches=item=>type==='all'||screenEntryType(item.signal)===type;
   const sort=list=>list.filter(matches).map(item=>({...item,priority:rankScreenItem(item)})).sort((a,b)=>(b.priority?.score??0)-(a.priority?.score??0)||(a.signal?.age??999)-(b.signal?.age??999));
-  return {asOf,rows,new:sort(active.filter(item=>item.signal.age<3)),active:sort(active),setup:sort(rows.filter(item=>item.state==='setup')),
+  return {asOf,rows,new:sort(active.filter(item=>item.signal.age===0&&item.signal.asOf===asOf)),active:sort(active),setup:sort(rows.filter(item=>item.state==='setup')),
     breadth:rows.length?rows.filter(item=>item.trend==='up').length/rows.length*100:null};
 }
 

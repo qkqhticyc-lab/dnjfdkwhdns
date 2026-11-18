@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loungeStocks,loungeTrend,loungeSectors} from '../lounge-core.mjs';
-const item=(symbol,extra={})=>({market:'KR',symbol,name:symbol,status:'ok',asOf:'2026-11-17',price:100,changePercent:2,trend:'up',liquidity:{average:2e10,median:1e10,activeDays:20},signal:{status:'active',age:1,entryType:'breakout',entry:100,initialStop:95,tp1:110},...extra});
+const item=(symbol,extra={})=>({market:'KR',symbol,name:symbol,status:'ok',asOf:'2026-11-17',price:100,changePercent:2,trend:'up',liquidity:{average:2e10,median:1e10,activeDays:20},signal:{status:'active',age:0,asOf:'2026-11-17',entryType:'breakout',entry:100,initialStop:95,tp1:110},...extra});
 test('overview uses latest matching closed date and the existing liquidity and exclusion rules',()=>{
  const snapshot=loungeStocks([item('005930'),item('000660',{asOf:'2026-11-16'}),item('030960'),item('123456',{liquidity:{average:10,median:10,activeDays:20}}),item('AMD',{market:'US'})],'KR');
  assert.equal(snapshot.asOf,'2026-11-17');assert.equal(snapshot.rows.length,1);assert.equal(snapshot.new.length,1);assert.equal(snapshot.breadth,100);
@@ -10,6 +10,11 @@ test('signal views distinguish new, active and setups and respect entry type',()
  const rows=[item('005930'),item('000660',{signal:{status:'active',age:4,entryType:'pullback',entry:100}}),item('123456',{state:'setup',signal:null})];
  const snapshot=loungeStocks(rows,'KR');assert.equal(snapshot.new.length,1);assert.equal(snapshot.active.length,2);assert.equal(snapshot.setup.length,1);
  assert.equal(loungeStocks(rows,'KR','pullback').active.length,1);assert.equal(loungeStocks([],'US').breadth,null);
+});
+test('recent signals require the market latest closed bar, without older or inconsistent signals',()=>{
+ const rows=[item('005930'),...[1,2,3].map(age=>item('00000'+age,{signal:{status:'active',age,asOf:'2026-11-16',entryType:'breakout'}})),item('123456',{signal:{status:'active',age:0,asOf:'2026-11-16'}}),item('123457',{signal:{status:'active',age:0}}),item('AMD',{market:'US',asOf:'2026-11-16',signal:{status:'active',age:0,asOf:'2026-11-16'}})];
+ assert.deepEqual(loungeStocks(rows,'KR').new.map(row=>row.symbol),['005930']);assert.equal(loungeStocks(rows,'KR').active.length,6);
+ assert.deepEqual(loungeStocks(rows,'US').new.map(row=>row.symbol),['AMD']);assert.equal(loungeStocks(rows.slice(1),'KR').new.length,0);
 });
 test('market trend excludes intraday unfinished daily observation',()=>{
  const end=Date.parse('2026-11-18T00:00Z'),points=Array.from({length:70},(_,index)=>({date:new Date(end-(69-index)*86400000).toISOString().slice(0,10),close:100+index}));
