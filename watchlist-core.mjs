@@ -8,6 +8,13 @@ export function watchItem(value){
  return {market,symbol,name,exchange,currency};
 }
 export const watchKey=item=>item.market+':'+item.symbol;
+export function reorderWatchlist(items,key,beforeKey=null){
+ const index=items.findIndex(item=>watchKey(item)===key);
+ if(index<0||key===beforeKey||(beforeKey!==null&&!items.some(item=>watchKey(item)===beforeKey)))return items;
+ const next=items.filter((_,i)=>i!==index),destination=beforeKey===null?next.length:next.findIndex(item=>watchKey(item)===beforeKey);
+ next.splice(destination,0,items[index]);
+ return next.every((item,i)=>item===items[i])?items:next;
+}
 export function mergeWatchlist(current,incoming){
  if(!Array.isArray(incoming)||incoming.length>100)throw Error('관심종목은 최대 100개입니다.');
  const map=new Map(current.map(v=>{const i=watchItem(v);return[watchKey(i),i];}));

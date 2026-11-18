@@ -1,4 +1,5 @@
-import{WATCH_KEY,watchItem,watchKey,mergeWatchlist,parseWatchlist}from'./watchlist-core.mjs';
+import{WATCH_KEY,watchItem,watchKey,mergeWatchlist,parseWatchlist,reorderWatchlist}from'./watchlist-core.mjs';
+import {initWatchlistReorder} from './watchlist-reorder.js';
 import {initChartStockPicker} from './chart-stock-picker.js';
 import {initWatchlistQuotes,watchQuoteText} from './watchlist-quotes.js';
 const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;return n;},button=(text,run)=>{const b=node('button',text);b.type='button';b.onclick=run;return b;};
@@ -15,6 +16,11 @@ export function initChartWorkspace({select,embedded=false,config}){
  const watch=panel('watchlist','관심종목',sidebar);const storageNote=node('p','이 브라우저에 저장합니다. 기기·브라우저 이전은 내보내기 파일을 사용하세요.','chart-storage-note');watch.append(storageNote);const status=node('p',null,'chart-watch-status');status.id='chart-watch-status';status.setAttribute('role','status');watch.append(status);const list=node('div',null,'chart-watch-list');list.id='chart-watch-list';watch.append(list);
  const transfer=node('div',null,'chart-watch-transfer'),file=node('input');file.type='file';file.accept='application/json,.json';file.hidden=true;file.id='chart-watch-import';
  let items=[],current=null;try{const raw=localStorage.getItem(WATCH_KEY);if(raw)items=parseWatchlist(raw);}catch{status.textContent='저장 목록을 읽지 못했습니다. 이 창에서는 관심종목을 계속 사용할 수 있습니다.';}
+ if(!status.textContent)status.textContent='드래그로 순서 변경 · 모바일은 길게 누르기';
+ const reorder=initWatchlistReorder({list,announce:text=>{status.textContent=text;},onMove:(key,before)=>{
+  const next=reorderWatchlist(items,key,before);if(next===items){status.textContent='관심종목 순서를 유지했습니다.';return;}
+  items=next;persist();render();if(status.textContent.includes('저장됨'))status.textContent+=' · 순서 변경됨';
+ }});
  const watchQuotes=initWatchlistQuotes(config,(key,quote)=>{
   const pick=[...list.querySelectorAll('[data-watch-select]')].find(button=>button.dataset.watchSelect===key);
   if(pick)showQuote(pick,quote);
@@ -30,15 +36,18 @@ export function initChartWorkspace({select,embedded=false,config}){
  }
  function persist(){try{localStorage.setItem(WATCH_KEY,JSON.stringify({schemaVersion:1,items}));status.textContent='관심종목 '+items.length+'개 · 이 브라우저에 저장됨';}catch{status.textContent='브라우저 저장이 차단되어 이 창에서만 유지됩니다. 내보내기로 보관하세요.';}window.dispatchEvent(new CustomEvent('investment-watchlist-change',{detail:{items}}));}
  function render(){
+  reorder.cancel();
   list.replaceChildren();
   if(!items.length)list.append(node('p','차트 제목 옆 ☆를 눌러 종목을 추가하세요.','chart-watch-empty'));
   for(const item of items){
    const row=node('div',null,'chart-watch-row');
+   row.dataset.watchRow=watchKey(item);
    const pick=button(null,()=>{select(item);setCurrent(item);if(media.matches)close();});
    pick.dataset.watchSelect=watchKey(item);
    pick.setAttribute('aria-pressed',String(current&&watchKey(current)===watchKey(item)));
-   pick.title=item.name+' · '+item.symbol+' · '+item.market;
-   pick.setAttribute('aria-label',pick.title);
+   pick.setAttribute('aria-label',item.name+' · '+item.symbol+' · '+item.market);
+   pick.title=pick.getAttribute('aria-label')+' · 드래그 또는 Alt+↑/↓로 순서 변경';
+   pick.setAttribute('aria-keyshortcuts','Alt+ArrowUp Alt+ArrowDown');
    pick.append(node('span',item.market==='US'?item.symbol:item.name,'chart-watch-name'),node('small',item.market,'chart-watch-market'));
    pick.append(node('span','—','chart-watch-change'));
    showQuote(pick,watchQuotes.get(item));
