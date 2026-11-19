@@ -105,9 +105,9 @@ export async function initLounge(config){
   }
 
   function renderAlerts(){
-    const alerts=parseNotificationState(storage(NOTIFICATION_KEY)).items.filter(item=>!item.readAt),list=$('lounge-alert-list');list.replaceChildren();$('lounge-open-alerts').textContent=alerts.length?'알림 '+alerts.length+'개':'알림 보기';
-    for(const item of alerts.slice(0,limits.alerts)){const row=element('a',null,'lounge-alert-row is-unread');row.href=item.stock?chartLink(item.stock):'./news.html#economic-calendar';row.append(element('b',item.title),element('small',stamp(item.occurredAt)));row.onclick=()=>window.dispatchEvent(new CustomEvent('investment-notification-read',{detail:{id:item.id}}));list.append(row);}
-    if(!alerts.length)empty(list,'새로 확인된 알림이 없습니다.');
+    const alerts=parseNotificationState(storage(NOTIFICATION_KEY)).items,list=$('lounge-alert-list');list.replaceChildren();$('lounge-open-alerts').textContent=alerts.length?'알림 '+alerts.length+'개':'알림 보기';
+    for(const item of alerts.slice(0,limits.alerts)){const row=element('a',null,'lounge-alert-row'+(item.readAt?'':' is-unread'));row.dataset.loungeNotificationId=item.id;row.href=item.stock?chartLink(item.stock):'./news.html#economic-calendar';row.append(element('b',item.title),element('small',stamp(item.occurredAt)+(item.readAt?' · 읽음':'')));row.onclick=()=>window.dispatchEvent(new CustomEvent('investment-notification-read',{detail:{id:item.id}}));list.append(row);}
+    if(!alerts.length)empty(list,'아직 기록된 알림이 없습니다.');
     more('alerts',alerts.length);
   }
 

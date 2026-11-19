@@ -15,7 +15,7 @@ try{
  for(const width of [1440,390,320]){
   const page=await browser.newPage({viewport:{width,height:1100}}),errors=[];let failNews=false;
   page.on('pageerror',error=>errors.push(error.message));
-  await page.addInitScript(({items,notification})=>{localStorage.setItem('investment-chart-watchlist-v1',JSON.stringify({schemaVersion:1,items}));localStorage.setItem('investment-notifications-v1',JSON.stringify(notification));},{items,notification});
+  await page.addInitScript(({items,notification})=>{localStorage.setItem('investment-chart-watchlist-v1',JSON.stringify({schemaVersion:1,items}));if(!localStorage.getItem('investment-notifications-v1'))localStorage.setItem('investment-notifications-v1',JSON.stringify(notification));},{items,notification});
   for(const name of names)await page.route('**/data/'+name+'.json',route=>route.fulfill(name==='news'&&failNews?{status:503,json:{}}:{json:datasets[name]}));
   await page.goto(base+'lounge.html');
   await page.waitForFunction(()=>document.querySelectorAll('.lounge-quotes strong').length===2&&document.querySelector('#lounge-screen-basis')?.textContent.includes('2026'));
@@ -42,12 +42,15 @@ try{
   assert.match(await page.locator('#lounge-screen-link').getAttribute('href'),/market=US/);
   await page.locator('#lounge-open-alerts').click();
   assert.equal(await page.locator('#notification-panel').isVisible(),true);
-  await page.getByRole('button',{name:'알림 닫기',exact:true}).click();
-  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('investment-notification-read',{detail:{id:'test-entry-alert'}})));
-  assert.ok(!(await page.locator('#lounge-alert-list').textContent()).includes('엔비디아 진입 신호'));
-  await page.evaluate(()=>{for(const item of JSON.parse(localStorage.getItem('investment-notifications-v1')).items)window.dispatchEvent(new CustomEvent('investment-notification-read',{detail:{id:item.id}}));});
-  assert.equal(await page.locator('.lounge-alert-row').count(),0);assert.match(await page.locator('#lounge-alert-list').textContent(),/새로 확인된 알림이 없습니다/);assert.equal(await page.locator('#lounge-alerts-more').isVisible(),false);
-  const previousNews=await page.locator('#lounge-news-list').textContent();
+  const unreadBefore=Number(await page.locator('.notification-badge').textContent()),historyCount=await page.locator('.lounge-alert-row').count();
+  const bellItem=page.locator('.notification-item[data-notification-id="test-entry-alert"]');await page.evaluate(()=>document.addEventListener('click',e=>{if(e.target.closest('.notification-item'))e.preventDefault();},{capture:true}));await bellItem.click();
+  assert.equal(Number(await page.locator('.notification-badge').textContent()),unreadBefore-1);
+  if(await page.locator('#notification-panel').isVisible())await page.getByRole('button',{name:'알림 닫기',exact:true}).click();
+  const historyItem=page.locator('[data-lounge-notification-id="test-entry-alert"]');assert.equal(await historyItem.count(),1,JSON.stringify({url:page.url(),rows:await page.locator('.lounge-alert-row').allTextContents(),stored:await page.evaluate(()=>JSON.parse(localStorage.getItem('investment-notifications-v1')).items.map(({id,readAt})=>({id,readAt})))}));assert.match(await historyItem.textContent(),/엔비디아 진입 신호.*읽음/);assert.equal(await historyItem.evaluate(n=>n.classList.contains('is-unread')),false);assert.equal(await page.locator('.lounge-alert-row').count(),historyCount);
+  await page.locator('#lounge-open-alerts').click();await page.getByRole('button',{name:'모두 읽음',exact:true}).click();assert.equal(await page.locator('.notification-badge').isVisible(),false);await page.getByRole('button',{name:'알림 닫기',exact:true}).click();
+  assert.equal(await page.locator('.lounge-alert-row').count(),historyCount);assert.equal(await page.locator('.lounge-alert-row.is-unread').count(),0);
+  await page.reload();await page.locator('[data-lounge-notification-id="test-entry-alert"]').waitFor({state:'attached'});assert.match(await page.locator('#lounge-alert-list').textContent(),/엔비디아 진입 신호.*읽음/);assert.equal(await page.locator('.notification-badge').isVisible(),false);
+  await page.waitForFunction(()=>document.querySelector('#lounge-screen-basis')?.textContent.includes('2026'));const previousNews=await page.locator('#lounge-news-list').textContent();
   await page.waitForFunction(()=>!document.getElementById('lounge-refresh').disabled);
   failNews=true;await page.locator('#lounge-refresh').click();
   await page.waitForFunction(()=>document.getElementById('lounge-status').textContent.includes('지연'));
