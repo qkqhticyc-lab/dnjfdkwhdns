@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {screenMarketDates,screenMarketDateText} from '../screener-freshness.mjs';
 import {screenRow} from '../screener-core.mjs';
 import {readFile} from 'node:fs/promises';
+import {screenRefreshDecision} from '../screener-refresh.mjs';
 
 test('market dates count each market separately and exclude failed or stale quotes', () => {
   const items=[{market:'KR',status:'ok',asOf:'2026-11-17'},{market:'KR',status:'ok',asOf:'2026-11-16'},
@@ -20,6 +21,16 @@ test('legacy snapshots work without benchmark references', () => {
   const dates=screenMarketDates([{market:'US',status:'ok',asOf:'2026-11-16'}]);
   assert.equal(dates[1].delayed,false);
   assert.equal(screenMarketDates([])[0].latest,null);
+});
+test('catch-up scan uses fresh closed references and avoids running or recently requested scans',()=>{
+ const now=new Date('2026-11-19T08:00Z'),snapshot={items:[{market:'KR',status:'ok',asOf:'2026-11-18'},{market:'US',status:'ok',asOf:'2026-11-18'}]},refs={KR:{status:'ok',asOf:'2026-11-19'},US:{status:'ok',asOf:'2026-11-18'}};
+ assert.equal(screenRefreshDecision(snapshot,refs,[],now).request,true);
+ assert.equal(screenRefreshDecision(snapshot,refs,[{status:'in_progress'}],now).request,false);
+ assert.equal(screenRefreshDecision(snapshot,refs,[{status:'queued'}],now).request,false);
+ assert.equal(screenRefreshDecision(snapshot,refs,[{status:'completed',createdAt:'2026-11-19T07:45Z'}],now).request,false);
+ assert.equal(screenRefreshDecision(snapshot,refs,[{status:'completed',createdAt:'2026-11-19T06:00Z'}],now).request,true);
+ assert.equal(screenRefreshDecision(snapshot,{KR:{status:'unavailable'}},[],now).request,false);
+ assert.equal(screenRefreshDecision({items:[...snapshot.items,{market:'KR',status:'ok',asOf:'2026-11-19'}]},refs,[],now).request,false);
 });
 
 function bars(through) {

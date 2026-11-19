@@ -28,7 +28,22 @@ export const STRATEGY_RULES=[
  ['contraction','변동성 수축','최근 10봉 고저폭/평균종가가 이전 10봉보다 20% 이상 축소, 거래량 감소, EMA21과 거리 ≤ 0.5ATR, 종가 > EMA55. 원본 VCP와 별도 규칙.']
 ].map(([key,label,rule])=>({key,label,rule,color:['exit','patternExit','exit14','exit21','pegInvalid'].includes(key)?'#f4a0aa':['entry','breakoutEntry','peg','pegBreakout'].includes(key)?'#72d8b1':['heat','profit','tp1','tp2'].includes(key)?'#f3c978':'#a5baff'}));
 const valid=p=>p&&[p.open,p.high,p.low,p.close].every(Number.isFinite),mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+// Prices are never filled across missing intraday buckets. Keep the chart history,
+// but calculate indicators, positions and pattern geometry per continuous segment.
+const indexFields=new Set(['index','lowIndex','startedIndex','lastAdd','lastProfit','start','end','apex','expires','breakout','retest']);
+function shiftSegment(value,offset){
+ if(!offset)return value;
+ if(Array.isArray(value))return value.map(v=>shiftSegment(v,offset));
+ if(!value||typeof value!=='object')return value;
+ if(Number.isFinite(value.m)&&Number.isFinite(value.b))return {...value,b:value.b-value.m*offset};
+ return Object.fromEntries(Object.entries(value).map(([key,v])=>[key,indexFields.has(key)&&Number.isFinite(v)?v+offset:key==='id'?offset+':'+v:shiftSegment(v,offset)]));
+}
 export function analyzeStrategy(rows){
+ if(Array.isArray(rows)&&rows.some((p,i)=>i>0&&p.gapBefore)){
+  if(rows.some((p,i)=>i>0&&p.asOf<=rows[i-1].asOf))throw Error('Invalid guide history');
+  const starts=[0,...rows.flatMap((p,i)=>i>0&&p.gapBefore?[i]:[])],parts=starts.map((start,i)=>({start,guide:analyzeStrategy(rows.slice(start,starts[i+1]).map(({gapBefore,...p})=>p))})),last=parts.at(-1).guide;
+  return {...last,observations:rows.length,continuousObservations:last.observations,frames:parts.flatMap(({start,guide})=>guide.frames.map((p,i)=>({...shiftSegment(p,start),...(start?{segmentStart:start,gapBefore:i===0}:{})}))),events:parts.flatMap(({start,guide})=>guide.events.map(e=>shiftSegment(e,start)))};
+ }
  const base=analyzeGuide(rows),patterns=analyzePatterns(rows,base.frames),oversold=analyzeOversold(rows,base.frames),events=[],frames=[],patternTrades={triangle:null,boxRetest:null,oversoldBounce:null};let trade=null,peg=null,setupActive=false,heatCount=0,contractActive=false;
  for(let i=0;i<rows.length;i++){
   const p=rows[i],g=base.frames[i],prev=base.frames[i-1],prior=rows.slice(Math.max(0,i-10),i),signals=[];

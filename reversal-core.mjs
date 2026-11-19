@@ -32,13 +32,14 @@ export function aggregateFourHours(payload,{symbol,market,currency,timezone},now
  if(!sessions.length)throw Error('No trading sessions');
  const cutoff=Math.min(now.getTime()/1000,meta.regularMarketTime),bars=new Map();
  for(const[i,time]of r.timestamp.entries()){if(!finite(time)||time>cutoff)continue;const open=q.open?.[i],high=q.high?.[i],low=q.low?.[i],close=q.close?.[i],volume=q.volume?.[i];if(![open,high,low,close].every(v=>finite(v)&&v>0)||high<Math.max(open,close,low)||low>Math.min(open,close,high))continue;bars.set(time,{open,high,low,close,volume:finite(volume)&&volume>=0?volume:null});}
- const all=[];let continuous=[],incomplete=0,inProgress=0;
+ const all=[];let continuous=[],incomplete=0,inProgress=0,gapPending=false;
  for(const session of sessions){for(let start=session.start;start<session.end;start+=14400){const end=Math.min(start+14400,session.end),provisional=end>cutoff;if(provisional){if(start<cutoff)inProgress++;if(!includeLive||start>=cutoff)continue;}const slots=[];for(let t=start;t<end&&(!provisional||t<=cutoff);t+=1800)if(!lunch(market,t,timezone))slots.push(t);if(!slots.length)continue;
-   if(slots.some(t=>!bars.has(t))){incomplete++;continuous=[];continue;}
+   if(slots.some(t=>!bars.has(t))){incomplete++;continuous=[];gapPending=true;continue;}
    const values=slots.map(t=>bars.get(t)),last=values.at(-1),row={asOf:new Date(end*1000).toISOString(),start:new Date(start*1000).toISOString(),open:values[0].open,high:Math.max(...values.map(p=>p.high)),low:Math.min(...values.map(p=>p.low)),close:last.close,volume:values.every(p=>p.volume!=null)?values.reduce((s,p)=>s+p.volume,0):null,durationMinutes:(end-start)/60,bucket:Math.floor((start-session.start)/14400),shortened:end-start<14400};
+   if(gapPending){row.gapBefore=true;gapPending=false;}
    if(includeLive)Object.assign(row,{provisional,observedAt:new Date(Math.min(end,cutoff)*1000).toISOString()});all.push(row);continuous.push(row);
   }}
- return{bars:continuous,validBars:all.length,incomplete,inProgress,sessionStart:sessions.at(-1).start,sessionEnd:sessions.at(-1).end,sourceThrough:new Date(cutoff*1000).toISOString()};
+ return{bars:continuous,history:all,validBars:all.length,incomplete,inProgress,sessionStart:sessions.at(-1).start,sessionEnd:sessions.at(-1).end,sourceThrough:new Date(cutoff*1000).toISOString()};
 }
 export async function collectReversals(own,fetcher=fetch,now=new Date()){
  const today=localDate(now.getTime()/1000,own.timezone),daily={...analyzeReversal(closedBars(own.bars,today).map(p=>({...p,asOf:p.date}))),guide:analyzeGuide(closedBars(own.bars,today).map(p=>({...p,asOf:p.date}))),timeframe:'1d',timezone:own.timezone,source:own.source,sourceName:'네이버페이 증권 일봉',collectedAt:now.toISOString()};let fourHour={status:'unavailable',timeframe:'4h',reason:'이 종목의 4시간봉 자료를 확인하지 못했습니다.',collectedAt:now.toISOString()};

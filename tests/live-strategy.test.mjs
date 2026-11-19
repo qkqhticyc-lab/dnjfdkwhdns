@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import{analyzeStrategy}from'../strategy-core.mjs';import{liveDailyRows}from'../live-chart-core.mjs';import{aggregateFourHours}from'../reversal-core.mjs';
+import{analyzeStrategy}from'../strategy-core.mjs';import{liveDailyRows,collectLiveChart}from'../live-chart-core.mjs';import{aggregateFourHours}from'../reversal-core.mjs';import{entrySnapshot}from'../entry-snapshot.mjs';
 const row=(i,c,extra={})=>({asOf:new Date(Date.UTC(2025,0,1+i)).toISOString().slice(0,10),open:c-.2,high:c+.4,low:c-.4,close:c,volume:100,...extra});
 const history=()=>Array.from({length:70},(_,i)=>row(i,100+i*.2));
 test('entry allows low volume; goals fixed at 1.5R/2.5R, no entry-bar target lookahead',()=>{
@@ -30,5 +30,17 @@ test('4h retains live OHLCV with no missing-slot fabrication; closes at session 
  const start=Date.parse('2026-11-11T00:00:00Z')/1000,end=start+21600,ts=Array.from({length:12},(_,i)=>start+i*1800),q={open:ts.map(()=>100),high:ts.map(()=>102),low:ts.map(()=>99),close:ts.map(()=>101),volume:ts.map(()=>10)},meta={symbol:'005930.KS',currency:'KRW',exchangeTimezoneName:'Asia/Seoul',dataGranularity:'30m',regularMarketTime:start+5400,tradingPeriods:[[{start,end}]]},raw={chart:{result:[{meta,timestamp:ts,indicators:{quote:[q]}}]}};
  const id={symbol:'005930.KS',market:'KR',currency:'KRW',timezone:'Asia/Seoul'},now=new Date((start+5400)*1000);let g=aggregateFourHours(raw,id,now,true);assert.equal(g.bars.length,1);assert.equal(g.bars[0].volume,40);assert.equal(g.bars[0].provisional,true);assert.equal(aggregateFourHours(raw,id,now).bars.length,0);
  meta.regularMarketTime=end;g=aggregateFourHours(raw,id,new Date(end*1000),true);assert.equal(g.bars.length,2);assert.ok(g.bars.every(p=>!p.provisional));assert.equal(g.bars[1].durationMinutes,120);
- q.close[9]=null;g=aggregateFourHours(raw,id,new Date(end*1000),true);assert.equal(g.bars.length,0,'gap clears contiguous history');
+ q.close[9]=null;g=aggregateFourHours(raw,id,new Date(end*1000),true);assert.equal(g.bars.length,0,'gap clears contiguous history');assert.equal(g.history.length,1,'valid chart history remains');
+});
+test('missing intraday bucket preserves valid candles while indicators and trades restart after the gap',()=>{
+ const before=[...history(),row(70,120)],full=[...before,row(71,121,{gapBefore:true}),row(72,122)],g=analyzeStrategy(full),prior=analyzeStrategy(before);
+ assert.deepEqual(g.frames.slice(0,before.length),prior.frames);assert.deepEqual(g.events.filter(e=>e.asOf<=before.at(-1).asOf),prior.events);
+ assert.equal(g.frames.at(-2).gapBefore,true);assert.equal(g.frames.at(-1).ema21,null);assert.equal(g.frames.at(-1).rsi,null);assert.equal(g.frames.at(-1).trade,null);assert.equal(entrySnapshot(g,full.at(-1).asOf),null);
+ assert.throws(()=>analyzeStrategy([...before,{...row(50,122),gapBefore:true}]));
+});
+test('live four-hour response retains earlier valid history when the final session has a missing opening slot',async()=>{
+ const start=Date.parse('2026-11-17T00:00Z')/1000,sessions=[0,86400].map(delta=>({start:start+delta,end:start+delta+21600})),ts=sessions.flatMap(s=>Array.from({length:12},(_,i)=>s.start+i*1800)),q={open:ts.map(()=>100),high:ts.map(()=>102),low:ts.map(()=>99),close:ts.map(()=>101),volume:ts.map(()=>10)};q.open[12]=null;
+ const now=new Date('2026-11-18T08:00Z'),raw={chart:{result:[{meta:{symbol:'005930.KS',currency:'KRW',exchangeTimezoneName:'Asia/Seoul',dataGranularity:'30m',regularMarketTime:sessions[1].end,tradingPeriods:sessions.map(s=>[s])},timestamp:ts,indicators:{quote:[q]}}]}};
+ const result=await collectLiveChart({market:'KR',symbol:'005930',currency:'KRW',frame:'fourHour'},async()=>({ok:true,json:async()=>raw}),now,async()=>({market:'KR',symbol:'005930',currency:'KRW',timezone:'Asia/Seoul',collectedAt:now.toISOString(),bars:[{date:'2026-11-18',open:100,high:102,low:99,close:101,volume:100}]}));
+ assert.equal(result.bars.length,3);assert.equal(result.bars.at(-1).gapBefore,true);assert.equal(result.frameInfo.gaps,1);assert.equal(result.guide.frames.length,3);assert.equal(result.guide.continuousObservations,1);
 });

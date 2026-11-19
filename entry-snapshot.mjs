@@ -3,7 +3,7 @@ import{entryTrigger,ENTRY_KEYS}from'./entry-types.mjs';
 export function entrySnapshot(guide, endAt) {
  const frames=guide.frames.filter(p=>p.asOf<=endAt),last=frames.at(-1);
  if(!last)return null;
- const events=guide.events.filter(e=>e.asOf<=last.asOf),entry=events.filter(e=>ENTRY_KEYS.includes(e.key)).at(-1);
+ const segment=frames.findLast(p=>p.gapBefore)?.asOf,events=guide.events.filter(e=>e.asOf<=last.asOf&&(!segment||e.asOf>=segment)),entry=events.filter(e=>ENTRY_KEYS.includes(e.key)).at(-1);
  if(!entry||!Number.isFinite(entry.close)||entry.close<=0)return null;
  const patternType=entry.patternType,matches=e=>patternType?e.entryAt===entry.asOf&&e.patternType===patternType:!e.entryAt,exit=events.find(e=>e.key===(patternType?'patternExit':'exit')&&e.asOf>entry.asOf&&matches(e)),active=(patternType?last.patternTrades?.[patternType]:last.trade)?.started===entry.asOf;
  const index=frames.findIndex(p=>p.asOf===entry.asOf),initial=entry.levels||frames[index]?.trade,trigger=entryTrigger(frames,index,entry.key);
