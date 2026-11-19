@@ -6,6 +6,7 @@ on:
     paths:
       - 'screener-core.mjs'
       - 'screener-rank.mjs'
+      - 'screener-location.mjs'
       - 'signal-study-core.mjs'
       - 'signal-events.mjs'
       - 'scripts/study-market.mjs'

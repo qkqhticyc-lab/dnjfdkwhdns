@@ -4,6 +4,7 @@ import{analyzeStrategy}from'./strategy-core.mjs';
 import{liveDailyRows}from'./live-chart-core.mjs';
 import{entrySnapshot}from'./entry-snapshot.mjs';
 import { rankInputs } from './screener-rank.mjs';
+import { locationInputs } from './screener-location.mjs';
 import { buildSignalStudy } from './signal-study-core.mjs';
 import { signalEventHistory } from './signal-events.mjs';
 export const SCREEN_GROUPS=[{market:'KR',exchange:'KOSPI',label:'코스피'},{market:'KR',exchange:'KOSDAQ',label:'코스닥'},{market:'US',exchange:'NASDAQ',label:'나스닥'},{market:'US',exchange:'NYSE',label:'뉴욕'},{market:'US',exchange:'AMEX',label:'아멕스'},{market:'JP',exchange:'TOKYO',label:'도쿄'}];
@@ -16,7 +17,7 @@ export function screenRow(item,bars,now=new Date(),options={}){
  const rows=liveDailyRows({...item,timezone:zones[item.market],bars,collectedAt:now.toISOString()},now).filter(p=>!p.provisional);
  if(rows.length<60)throw Error('Insufficient closed history');const guide=analyzeStrategy(rows),last=guide.frames.at(-1),signal=entrySnapshot(guide,last.asOf),index=signal?guide.frames.findIndex(p=>p.asOf===signal.asOf):-1;
  const tools=options.signalTools?{signalToolsVersion:1,studies:buildSignalStudy(rows,guide,date=>options.marketRegimes?.[date]||'unknown'),alertHistory:signalEventHistory(item,guide)}:{};
- return{...item,...tools,rankInputs:rankInputs(last),liquidity:liquidityStats(rows),status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,candidate:reboundCandidate(guide.frames),state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
+ return{...item,...tools,locationInputs:locationInputs(guide,signal),rankInputs:rankInputs(last),liquidity:liquidityStats(rows),status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,candidate:reboundCandidate(guide.frames),state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
 }
 export function filterScreen(items,{market='ALL',query='',age=3,state='active',trend='ALL',volume=0,liquidity='all',excludeSpecial=false,excluded=[],entryType='all'}={}){
  return items.filter(p=>{const candidateMode=entryType==='reboundCandidate',ref=candidateMode?p.candidate:p.signal;return p.status==='ok'&&(candidateMode?ref?.state==='watch':entryType==='all'||entryType==='confirmed'&&['breakout','pullback','triangle','boxRetest'].includes(screenEntryType(p.signal))||screenEntryType(p.signal)===entryType)&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||ref&&ref.age<(Number(age)===0?1:Number(age)))&&(candidateMode||state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume);});
