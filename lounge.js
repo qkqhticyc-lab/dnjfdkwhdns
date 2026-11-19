@@ -5,8 +5,6 @@ import {ENTRY_LABELS,screenEntryType} from './entry-types.mjs';
 import {SECTORS} from './sector-core.mjs';
 import {formatPrice} from './price-display.mjs';
 import {priceCrosshair} from './chart-crosshair.js';
-import {WATCH_KEY,parseWatchlist,watchKey} from './watchlist-core.mjs';
-import {initWatchlistQuotes,watchQuoteText} from './watchlist-quotes.js';
 import {NOTIFICATION_KEY,parseNotificationState} from './notifications-core.mjs';
 import {calendarStatus,koreaDay,shiftDay,mergeHeadlines,safeNewsUrl,validateMarketNews} from './market-news-core.mjs';
 import {compareIndicatorForecast} from './calendar-consensus-core.mjs';
@@ -23,17 +21,16 @@ function storage(key){try{return localStorage.getItem(key);}catch{return null;}}
 export async function initLounge(config){
   const params=new URLSearchParams(location.search),saved=params.get('market')||storage('lounge-market-v1');
   let market=saved==='US'?'US':'KR',view='new',data={},live,storedBusy=false,liveBusy=false;
+  const limits={signals:4,calendar:4,news:4,alerts:2};
   const sources=['indicators','indicator-history','screener','sectors','news'],failures=new Set();
   const ids=()=>market==='KR'?['kospi','kosdaq']:['sp500','nasdaq'];
   const daily=id=>data.indicators?.items?.find(item=>item.id===id);
   const current=id=>live?.items?.find(item=>item.id===id&&['ok','stale'].includes(item.status))||daily(id);
   const stocks=()=>loungeStocks(data.screener?.items||[],market,$('lounge-type').value);
   const classifications=()=>new Map((data.sectors?.items||[]).map(item=>[item.key,item]));
-  const quotes=initWatchlistQuotes(config,()=>renderWatch());
-  let watchlist=[];
-  function syncWatchlist(){try{watchlist=parseWatchlist(storage(WATCH_KEY)||'{"schemaVersion":1,"items":[]}');}catch{watchlist=[];}quotes.setItems(watchlist);renderWatch();}
   function meta(at,failed=false){return stamp(at)+' KST'+(failed?' · 갱신 지연':'');}
   function empty(host,text){host.replaceChildren(element('p',text,'lounge-empty'));}
+  function more(key,total){const button=$('lounge-'+key+'-more');button.hidden=total<=limits[key];button.textContent='더보기 ('+Math.min(limits[key],total)+'/'+total+')';}
 
   function renderTape(){
     const [primary,secondary]=ids(),item=current(primary),host=$('lounge-chart');host.replaceChildren();
@@ -70,24 +67,25 @@ export async function initLounge(config){
     metric('당일 확정 진입','기준일 당일 마감봉 · 유동성 기준',snapshot.new.length+'종목');
   }
 
-  function stockRow(item,detail,quote){
+  function stockRow(item,detail){
     const link=element('a',null,'lounge-stock-row');link.href=chartLink(item);
     const info=element('div',null,'lounge-stock-info');info.append(element('b',item.market==='US'?item.symbol:item.name),element('small',detail));
-    const value=element('div',null,'lounge-stock-price');value.append(element('strong',formatPrice(quote?.price??item.price,item.currency)),element('span',quote?watchQuoteText(quote):percent(item.changePercent),tone(quote?.changePercent??item.changePercent)));link.append(info,value);return link;
+    const value=element('div',null,'lounge-stock-price');value.append(element('strong',formatPrice(item.price,item.currency)),element('span',percent(item.changePercent),tone(item.changePercent)));link.append(info,value);return link;
   }
   function renderSignals(){
     const snapshot=stocks(),host=$('lounge-signal-list');host.replaceChildren();
     for(const button of document.querySelectorAll('[data-lounge-state]')){const key=button.dataset.loungeState;button.textContent=({new:'최근 신호',active:'추적 중',setup:'셋업'})[key]+' '+snapshot[key].length;button.setAttribute('aria-pressed',String(key===view));}
     $('lounge-screen-basis').textContent=(snapshot.asOf||'기준일 미제공')+' 마감 일봉 · 최근 신호는 당일봉만 · 유동성 기준 적용';
     $('lounge-screen-link').href='./screener.html?market='+market;
-    for(const item of snapshot[view].slice(0,4)){const type=screenEntryType(item.signal),detail=view==='setup'?'이평선 정렬 셋업 · 확정 진입 대기':(ENTRY_LABELS[type]||'진입')+' · '+(item.signal.age===0?'당일봉':item.signal.age+'봉 전')+(item.priority?' · 우선순위 '+item.priority.score+'점':'');host.append(stockRow(item,detail));}
+    for(const item of snapshot[view].slice(0,limits.signals)){const type=screenEntryType(item.signal),detail=view==='setup'?'이평선 정렬 셋업 · 확정 진입 대기':(ENTRY_LABELS[type]||'진입')+' · '+(item.signal.age===0?'당일봉':item.signal.age+'봉 전')+(item.priority?' · 우선순위 '+item.priority.score+'점':'');host.append(stockRow(item,detail));}
     if(!snapshot[view].length)empty(host,data.screener?view==='new'?'기준일 당일봉에 발생한 진입 신호가 없습니다.':'선택한 유형에 맞는 종목이 없습니다. 진입필터에서 조건을 조정하세요.':'진입필터 자료를 확인하고 있습니다.');
+    more('signals',snapshot[view].length);
   }
 
   function renderCalendar(){
     const feed=data.news?.calendar,today=koreaDay(),host=$('lounge-calendar-list');host.replaceChildren();$('lounge-calendar-basis').textContent='한국 시간 · '+meta(feed?.fetchedAt,feed?.status==='stale'||failures.has('news'));
     const events=(feed?.items||[]).filter(event=>event.major&&event.date>=today&&event.date<=shiftDay(today,7)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'23:59').localeCompare(b.time||'23:59'));
-    for(const event of events.slice(0,4)){
+    for(const event of events.slice(0,limits.calendar)){
       const row=element('a',null,'lounge-calendar-row');row.href='./news.html#economic-calendar';const date=element('div',null,'lounge-calendar-date');date.append(element('span',event.date.slice(5,7)+'월'),element('strong',event.date.slice(8)));
       const body=element('div'),state=calendarStatus(event),comparison=compareIndicatorForecast(event.actual,event.forecast);body.append(element('b',(event.country==='KOR'?'한국':'미국')+' · '+event.title),element('small',(event.time||'시각 미정')+' · '+({released:'발표 완료',upcoming:'발표 예정',pending:'결과 확인 중'})[state]));
       const values=element('p');if(event.actual!=null)values.append(element('span','실제 '+event.actual+' '));values.append(element('span','예측 '+(event.forecast??'미제공')+' · 이전 '+(event.previous??'미제공')));body.append(values);
@@ -95,27 +93,27 @@ export async function initLounge(config){
       row.append(date,body);host.append(row);
     }
     if(!events.length)empty(host,'확인된 주요 경제 일정이 없습니다. 전체 일정에서 자료 상태를 확인하세요.');
+    more('calendar',events.length);
   }
   function renderNews(){
     const news=data.news,host=$('lounge-news-list');host.replaceChildren();
     $('lounge-news-basis').textContent='국내·해외 증시 소식 · '+meta(news?.attemptedAt,failures.has('news')||news?.domestic?.status==='stale'||news?.global?.status==='stale');
     const items=mergeHeadlines([...(news?.domestic?.items||[]),...(news?.global?.items||[])]);
-    for(const item of items.slice(0,4)){const link=element('a',null,'lounge-news-row');link.href=safeNewsUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';link.append(element('b',item.title),element('small',item.topic+' · '+item.source+' · '+stamp(item.publishedAt)));host.append(link);}
+    for(const item of items.slice(0,limits.news)){const link=element('a',null,'lounge-news-row');link.href=safeNewsUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';link.append(element('b',item.title),element('small',item.topic+' · '+item.source+' · '+stamp(item.publishedAt)));host.append(link);}
     if(!items.length)empty(host,'최신 뉴스 자료를 확인하고 있습니다.');
+    more('news',items.length);
   }
 
-  function renderWatch(){
-    const host=$('lounge-watch-list');host.replaceChildren();
-    for(const item of watchlist.slice(0,3)){const quote=quotes.get(item);const row=stockRow(item,item.market+' · '+(quote?.asOf?meta(quote.asOf,quote.status==='stale'):'시세 확인 중'),quote||{price:null,changePercent:null});row.dataset.loungeWatch=watchKey(item);host.append(row);}
-    if(!watchlist.length)empty(host,'차트에서 ☆를 눌러 관심종목을 등록하세요.');
+  function renderAlerts(){
     const alerts=parseNotificationState(storage(NOTIFICATION_KEY)).items.filter(item=>!item.readAt),list=$('lounge-alert-list');list.replaceChildren();$('lounge-open-alerts').textContent=alerts.length?'알림 '+alerts.length+'개':'알림 보기';
-    for(const item of alerts.slice(0,2)){const row=element('a',null,'lounge-alert-row is-unread');row.href=item.stock?chartLink(item.stock):'./news.html#economic-calendar';row.append(element('b',item.title),element('small',stamp(item.occurredAt)));row.onclick=()=>window.dispatchEvent(new CustomEvent('investment-notification-read',{detail:{id:item.id}}));list.append(row);}
-    if(watchlist.length&&!alerts.length)list.append(element('p','새로 확인된 알림이 없습니다.','lounge-meta'));
+    for(const item of alerts.slice(0,limits.alerts)){const row=element('a',null,'lounge-alert-row is-unread');row.href=item.stock?chartLink(item.stock):'./news.html#economic-calendar';row.append(element('b',item.title),element('small',stamp(item.occurredAt)));row.onclick=()=>window.dispatchEvent(new CustomEvent('investment-notification-read',{detail:{id:item.id}}));list.append(row);}
+    if(!alerts.length)empty(list,'새로 확인된 알림이 없습니다.');
+    more('alerts',alerts.length);
   }
 
   function draw(){
     for(const button of document.querySelectorAll('[data-lounge-market]'))button.setAttribute('aria-pressed',String(button.dataset.loungeMarket===market));
-    renderTape();renderState();renderSignals();renderCalendar();renderNews();renderWatch();
+    renderTape();renderState();renderSignals();renderCalendar();renderNews();renderAlerts();
     $('lounge-status').textContent=failures.size?'일부 자료 갱신이 지연됩니다. 확인된 자료와 기준 시각을 유지합니다.':'지수는 30초마다 조회 · 진입 신호는 마감봉 · 일정·뉴스는 게시 자료 기준';
   }
   async function json(url,headers){const response=await fetch(url,{headers,cache:'no-store',signal:AbortSignal.timeout(20000)});if(!response.ok)throw Error('Data unavailable');const value=await response.json();if(value?.schemaVersion!==1)throw Error('Invalid dashboard data');return value;}
@@ -129,14 +127,15 @@ export async function initLounge(config){
     try{const value=await json(config.supabase.url+'/functions/v1/market-indicators',{apikey:config.supabase.publishableKey,Authorization:'Bearer '+config.supabase.edgeAnonKey});if(value.items?.length!==12)throw Error('Invalid indicator count');live=retainLiveItems(value,live);failures.delete('live');}catch{failures.add('live');if(live)live={...live,items:live.items.map(item=>({...item,status:item.status==='ok'?'stale':item.status}))};}
     liveBusy=false;$('lounge-refresh').disabled=storedBusy;draw();
   }
-  for(const button of document.querySelectorAll('[data-lounge-market]'))button.onclick=()=>{market=button.dataset.loungeMarket;try{localStorage.setItem('lounge-market-v1',market);}catch{}draw();};
-  for(const button of document.querySelectorAll('[data-lounge-state]'))button.onclick=()=>{view=button.dataset.loungeState;renderSignals();};
-  $('lounge-type').onchange=()=>{renderSignals();renderState();};
+  for(const button of document.querySelectorAll('[data-lounge-market]'))button.onclick=()=>{market=button.dataset.loungeMarket;limits.signals=4;try{localStorage.setItem('lounge-market-v1',market);}catch{}draw();};
+  for(const button of document.querySelectorAll('[data-lounge-state]'))button.onclick=()=>{view=button.dataset.loungeState;limits.signals=4;renderSignals();};
+  $('lounge-type').onchange=()=>{limits.signals=4;renderSignals();renderState();};
+  for(const[key,render]of Object.entries({signals:renderSignals,calendar:renderCalendar,news:renderNews,alerts:renderAlerts}))$('lounge-'+key+'-more').onclick=()=>{limits[key]+=4;render();};
   $('lounge-open-alerts').onclick=event=>{event.stopPropagation();document.getElementById('notification-button')?.click();};
   $('lounge-refresh').onclick=()=>Promise.all([loadStored(),loadLive()]);
-  window.addEventListener('storage',event=>{if(event.key===WATCH_KEY)syncWatchlist();if(event.key===NOTIFICATION_KEY)renderWatch();});
-  window.addEventListener('investment-watchlist-change',syncWatchlist);window.addEventListener('investment-notifications-change',renderWatch);
+  window.addEventListener('storage',event=>{if(event.key===NOTIFICATION_KEY)renderAlerts();});
+  window.addEventListener('investment-notifications-change',renderAlerts);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadLive();});
-  syncWatchlist();draw();setInterval(()=>{if(!document.hidden)loadLive();},30000);setInterval(()=>{if(!document.hidden)loadStored();},300000);
+  draw();setInterval(()=>{if(!document.hidden)loadLive();},30000);setInterval(()=>{if(!document.hidden)loadStored();},300000);
   await Promise.all([loadStored(),loadLive()]);
 }

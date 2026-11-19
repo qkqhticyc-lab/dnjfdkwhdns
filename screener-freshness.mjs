@@ -15,5 +15,5 @@ export function screenMarketDates(items, references = {}) {
 export function screenMarketDateText(summaries) {
   return summaries.map(summary => summary.label + ' ' + (summary.latest || '자료 미제공')
     + (summary.total ? ' (' + summary.current.toLocaleString('ko-KR') + '/' + summary.total.toLocaleString('ko-KR') + '종목)' : '')
-    + (summary.delayed ? ' · 기준 지수 ' + summary.reference + ' 대비 갱신 지연' : '')).join(' / ');
+    + (summary.delayed ? ' · 확인된 마감일 ' + summary.reference + ' 대비 갱신 지연' : '')).join(' / ');
 }

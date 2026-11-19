@@ -14,7 +14,7 @@ test('market dates count each market separately and exclude failed or stale quot
   assert.equal(dates[1].latest,'2026-11-16');assert.equal(dates[1].delayed,true);
   assert.equal(dates[2].latest,null);
   assert.match(screenMarketDateText(dates),/한국 2026-11-17 \(1\/2종목\)/);
-  assert.match(screenMarketDateText(dates),/기준 지수 2026-11-17 대비 갱신 지연/);
+  assert.match(screenMarketDateText(dates),/확인된 마감일 2026-11-17 대비 갱신 지연/);
 });
 
 test('legacy snapshots work without benchmark references', () => {

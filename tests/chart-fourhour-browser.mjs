@@ -12,8 +12,8 @@ try {
   {market:'KR', symbol:'005930', currency:'KRW', name:'삼성전자'},
   {market:'US', symbol:'MU', currency:'USD', name:'Micron'},
   {market:'JP', symbol:'8035', currency:'JPY', name:'Tokyo Electron'}
- ]) {
-  const page = await browser.newPage({viewport:{width:390, height:844}, isMobile:true, hasTouch:true});
+ ]) for(const width of [1440,390]) {
+  const page = await browser.newPage({viewport:{width, height:950}, isMobile:width<1100, hasTouch:true});
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(base + 'charts.html?' + new URLSearchParams(stock));
@@ -24,6 +24,7 @@ try {
   const response = page.waitForResponse(response => response.url().includes('/stock-chart?') && response.url().includes('frame=fourHour') && response.ok());
   await page.locator('[data-guide-frame=fourHour]').tap();
   const data = await (await response).json();
+  assert.ok(data.bars.length>30,'valid historical candles must remain even when recent intraday slots are missing');
   await page.waitForFunction(() => document.querySelector('#chart-info').textContent.includes('4시간봉'));
   await plot.waitFor();
   const state = () => plot.evaluate(node => ({...node.dataset}));
@@ -36,6 +37,7 @@ try {
    const rect = await plot.boundingBox();
    const x = rect.x + rect.width * .4;
    const y = rect.y + rect.height * .35;
+   if(width>=1100){await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx,y+dy,{steps:8});await page.mouse.up();return;}
    await cdp.send('Input.dispatchTouchEvent', {type:'touchStart', touchPoints:[{x, y, id:1}]});
    for (let step=1; step<=6; step++) {
     await cdp.send('Input.dispatchTouchEvent', {type:'touchMove', touchPoints:[{x:x+dx*step/6, y:y+dy*step/6, id:1}]});
@@ -85,7 +87,7 @@ try {
   assert.ok((await state()).viewStart < zoomed.viewStart, 'pinch then one-finger pan works');
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   assert.deepEqual(errors, []);
-  console.log('PASS', stock.market, 'four-hour mobile swipe both ways, vertical pan, refresh anchor, frame ranges, fullscreen, pinch');
+  console.log('PASS', stock.market,width,'four-hour history, pan both ways, vertical pan, refresh anchor, frame ranges, fullscreen, pinch');
   await page.close();
  }
 } finally {

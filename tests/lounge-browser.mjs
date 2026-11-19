@@ -4,11 +4,12 @@ const base=process.env.TEST_SITE_URL||'http://127.0.0.1:5183/preview/';
 const names=['indicators','indicator-history','screener','sectors','news'];
 const datasets=Object.fromEntries(await Promise.all(names.map(async name=>[name,await fetch('https://qkqhticyc-lab.github.io/dnjfdkwhdns/data/'+name+'.json').then(response=>response.json())])));
 const stock=(market,symbol,age)=>({market,symbol,name:age?'전일 신호 검증':'당일 신호 검증',currency:market==='KR'?'KRW':'USD',status:'ok',asOf:market==='KR'?'2026-11-18':'2026-11-17',price:100,changePercent:2,trend:'up',liquidity:{average:3e10,median:3e10,activeDays:20},signal:{status:'active',age,asOf:age?'2026-11-16':market==='KR'?'2026-11-18':'2026-11-17',entryType:'pullback',entry:100,initialStop:95,tp1:110}});
-datasets.screener.items=[stock('KR','005930',0),stock('KR','000660',1),stock('US','AMD',0),stock('US','NVDA',2)];
+datasets.screener.items=[stock('KR','005930',0),...Array.from({length:11},(_,i)=>stock('KR',String(100000+i),0)),stock('KR','000660',1),stock('US','AMD',0),...Array.from({length:5},(_,i)=>stock('US','TEST'+i,0)),stock('US','NVDA',2)];
 const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}),template=datasets.news.calendar.items[0];
 datasets.news.calendar.items=[...['3.00%','2.00%','1.00%'].map((actual,index)=>({...template,id:'lounge-consensus-'+index,title:'지표 예측 비교 '+index,date:today,time:'00:00',scheduledAt:today+'T00:00:00+09:00',actual,forecast:'2.00%',previous:'2.00%'})),...datasets.news.calendar.items];
 const items=[{market:'KR',symbol:'005930',name:'삼성전자',currency:'KRW',exchange:'코스피'},{market:'US',symbol:'NVDA',name:'엔비디아',currency:'USD',exchange:'NASDAQ'}],now=Date.now();
 const notification={schemaVersion:1,watched:{'KR:005930':now-86400000,'US:NVDA':now-86400000},settings:{entry:true,tp1:true,tp2:true,exit:true,earnings:true,macro:false},settingsAt:0,items:[{id:'test-entry-alert',kind:'entry',title:'엔비디아 진입 신호',body:'새로운 마감봉 신호',occurredAt:new Date(now).toISOString(),stock:items[1],readAt:0}]};
+notification.items.push(...Array.from({length:5},(_,i)=>({...notification.items[0],id:'test-extra-alert-'+i,title:'알림 확인 '+i})));
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
 try{
  for(const width of [1440,390,320]){
@@ -21,17 +22,21 @@ try{
   assert.equal(await page.locator('.lounge-card').count(),6);
   assert.equal(await page.locator('header nav a[href="./lounge.html"]').count(),0);
   assert.equal(await page.locator('header .brand').getAttribute('href'),'./lounge.html');assert.equal(await page.locator('header .brand').getAttribute('aria-current'),'page');
-  assert.equal(await page.locator('[data-lounge-state=new]').textContent(),'최근 신호 1');assert.equal(await page.locator('#lounge-signal-list .lounge-stock-row').count(),1);
+  assert.equal(await page.locator('[data-lounge-state=new]').textContent(),'최근 신호 12');assert.equal(await page.locator('#lounge-signal-list .lounge-stock-row').count(),4);
+  await page.locator('#lounge-signals-more').click();assert.equal(await page.locator('#lounge-signal-list .lounge-stock-row').count(),8);await page.locator('#lounge-signals-more').click();assert.equal(await page.locator('#lounge-signal-list .lounge-stock-row').count(),12);assert.equal(await page.locator('#lounge-signals-more').isVisible(),false);
+  assert.equal(await page.locator('#lounge-watch-list,[data-lounge-watch],.lounge-watch .lounge-stock-row').count(),0);assert.equal(await page.locator('.lounge-watch .lounge-card-head h2').textContent(),'알림');assert.equal(await page.locator('.lounge-watch a[href="./charts.html"]').count(),0);
+  assert.equal(await page.locator('.lounge-alert-row').count(),2);await page.locator('#lounge-alerts-more').click();assert.ok(await page.locator('.lounge-alert-row').count()>2);
   assert.match(await page.locator('#lounge-screen-basis').textContent(),/2026-11-18.*당일봉만/);assert.match(await page.locator('#lounge-signal-list').textContent(),/당일봉/);assert.doesNotMatch(await page.locator('#lounge-signal-list').textContent(),/전일 신호 검증/);
   assert.ok((await page.locator('#lounge-alert-list').textContent()).includes('엔비디아'));
   assert.ok(await page.locator('.lounge-forecast.lounge-positive').count()>0);
   assert.ok(await page.locator('.lounge-forecast.lounge-negative').count()>0);
   assert.ok(await page.locator('.lounge-forecast:not(.lounge-positive):not(.lounge-negative)').count()>0);
+  for(const[key,selector]of [['calendar','.lounge-calendar-row'],['news','.lounge-news-row']]){const more=page.locator('#lounge-'+key+'-more');if(await more.isVisible()){const before=await page.locator(selector).count();await more.click();assert.ok(await page.locator(selector).count()>before);}}
   await page.screenshot({path:'outputs/lounge-'+width+'.png',fullPage:true});
   await page.locator('[data-lounge-market=US]').click();
   assert.equal(await page.locator('[data-lounge-market=US]').getAttribute('aria-pressed'),'true');
   assert.ok((await page.locator('#lounge-quotes').textContent()).includes('S&P 500'));
-  assert.equal(await page.locator('[data-lounge-state=new]').textContent(),'최근 신호 1');assert.match(await page.locator('#lounge-screen-basis').textContent(),/2026-11-17.*당일봉만/);assert.match(await page.locator('#lounge-signal-list').textContent(),/AMD/);assert.doesNotMatch(await page.locator('#lounge-signal-list').textContent(),/NVDA/);
+  assert.equal(await page.locator('[data-lounge-state=new]').textContent(),'최근 신호 6');assert.equal(await page.locator('#lounge-signal-list .lounge-stock-row').count(),4);await page.locator('#lounge-signals-more').click();assert.equal(await page.locator('#lounge-signal-list .lounge-stock-row').count(),6);assert.match(await page.locator('#lounge-screen-basis').textContent(),/2026-11-17.*당일봉만/);assert.match(await page.locator('#lounge-signal-list').textContent(),/AMD/);assert.doesNotMatch(await page.locator('#lounge-signal-list').textContent(),/NVDA/);
   await page.locator('#lounge-type').selectOption('pullback');await page.locator('[data-lounge-state=active]').click();
   for(const row of await page.locator('#lounge-signal-list .lounge-stock-info small').allTextContents())assert.match(row,/눌림/);
   assert.match(await page.locator('#lounge-screen-link').getAttribute('href'),/market=US/);
@@ -40,6 +45,8 @@ try{
   await page.getByRole('button',{name:'알림 닫기',exact:true}).click();
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('investment-notification-read',{detail:{id:'test-entry-alert'}})));
   assert.ok(!(await page.locator('#lounge-alert-list').textContent()).includes('엔비디아 진입 신호'));
+  await page.evaluate(()=>{for(const item of JSON.parse(localStorage.getItem('investment-notifications-v1')).items)window.dispatchEvent(new CustomEvent('investment-notification-read',{detail:{id:item.id}}));});
+  assert.equal(await page.locator('.lounge-alert-row').count(),0);assert.match(await page.locator('#lounge-alert-list').textContent(),/새로 확인된 알림이 없습니다/);assert.equal(await page.locator('#lounge-alerts-more').isVisible(),false);
   const previousNews=await page.locator('#lounge-news-list').textContent();
   await page.waitForFunction(()=>!document.getElementById('lounge-refresh').disabled);
   failNews=true;await page.locator('#lounge-refresh').click();
@@ -47,7 +54,7 @@ try{
   assert.equal(await page.locator('#lounge-news-list').textContent(),previousNews);
   await page.locator('header nav a[href="./index.html"]').click();await page.waitForURL('**/index.html');await page.waitForFunction(()=>document.querySelector('header .brand')?.getAttribute('title')==='시장 한눈에로 이동');
   assert.equal(await page.locator('header nav a[href="./lounge.html"]').count(),0);assert.equal(await page.locator('header nav a[aria-current=page]').textContent(),'시장 현황');
-  await page.locator('header .brand').click();await page.waitForURL('**/lounge.html');await page.waitForFunction(()=>document.querySelector('[data-lounge-state=new]')?.textContent==='최근 신호 1');
+  await page.locator('header .brand').click();await page.waitForURL('**/lounge.html');await page.waitForFunction(()=>document.querySelector('[data-lounge-state=new]')?.textContent==='최근 신호 6');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({width,signals:await page.locator('#lounge-signal-list .lounge-stock-row').count(),news:await page.locator('.lounge-news-row').count(),calendar:await page.locator('.lounge-calendar-row').count(),errors}));
