@@ -33,16 +33,17 @@ export function structure(rows,date){
  const a=wilderRange(bars,14),prev=wilderRange(bars.slice(0,-1),14),ma20=bars.length>=20?bars.slice(-20).reduce((s,p)=>s+p.close,0)/20:null;
  return {symbol:'SPX',date,close:last.close,ma30,trend:ma30==null?'UNKNOWN':last.close>=ma30?'ABOVE':'BELOW',ma20,...a,atrRising:finite(a.atr)&&finite(prev.atr)?a.atr>prev.atr:null,adxRising:finite(a.adx)&&finite(prev.adx)?a.adx>prev.adx:null};
 }
-export function assess(series,{now=new Date(),rules=RULES}={}){
- const spx=completed(series.SPX||[],now),vix=completed(series.VIX||[],now),date=[spx.at(-1)?.date,vix.at(-1)?.date].filter(Boolean).sort().at(-1)||null;
+export function assess(series,{now=new Date(),rules=RULES,includeCurrent=false,technicalOverride}={}){
+ const eligible=includeCurrent?rows=>rows.filter(p=>day(p.date)&&p.date<=nyClock(now).date&&finite(p.close)&&p.close>0).sort((a,b)=>a.date.localeCompare(b.date)):rows=>completed(rows,now);
+ const spx=eligible(series.SPX||[]),vix=eligible(series.VIX||[]),date=[spx.at(-1)?.date,vix.at(-1)?.date].filter(Boolean).sort().at(-1)||null;
  const ids=['VIX','VIX3M','VIX6M','VIX9D','VVIX','SKEW','MOVE','DXY','SPX'];
- const values=Object.fromEntries(ids.map(id=>[id,date?observation(completed(series[id]||[],now),date):null]));
+ const values=Object.fromEntries(ids.map(id=>[id,date?observation(eligible(series[id]||[]),date):null]));
  const missing=ids.filter(id=>!values[id]),v=id=>values[id]?.value;
  const curve=v('VIX3M')&&v('VIX')?v('VIX3M')-v('VIX'):null,long=v('VIX6M')&&v('VIX3M')?v('VIX6M')-v('VIX3M'):null,ratio=v('VIX3M')&&v('VIX')?v('VIX')/v('VIX3M'):null,short=v('VIX9D')&&v('VIX')?v('VIX9D')-v('VIX'):null;
  const lights={curve:curve==null?'unknown':curve<=rules.spreadRed?'red':curve<=rules.spreadYellow?'yellow':'green',long:long==null?'unknown':long<=0?'red':long<=rules.longYellow?'yellow':'green',ratio:ratio==null?'unknown':ratio>=rules.ratioRed?'red':ratio>=rules.ratioYellow?'yellow':'green',short:short==null?'unknown':short>=rules.shortRed?'red':short>=rules.shortYellow?'yellow':'green'};
  const backwardation=curve!=null&&curve<0,near=!backwardation&&((ratio!=null&&ratio>=rules.ratioYellow)||(curve!=null&&curve<=rules.spreadRed));
- const technical=date?structure(spx,date):null;
- const spxWeak=(values.SPX?.change!=null&&values.SPX.change<=rules.spxFall)||(technical?.ma20!=null&&technical.close<technical.ma20&&technical.minusDI>technical.plusDI);
+ const technical=technicalOverride!==undefined?technicalOverride:date?structure(spx,date):null;
+ const spxWeak=(values.SPX?.change!=null&&values.SPX.change<=rules.spxFall)||(technical?.ma20!=null&&values.SPX?.value<technical.ma20&&technical.minusDI>technical.plusDI);
  const moveShock=v('MOVE')>=rules.moveLevel&&values.MOVE?.change>=rules.moveJump;
  let candidate='stable',reasons=[];
  if(backwardation){candidate=moveShock?'trigger':'fracture';reasons=['BACKWARDATION',...(moveShock?['MOVE']:[])];}

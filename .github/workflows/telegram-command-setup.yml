@@ -1,0 +1,26 @@
+name: Configure Telegram commands
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/telegram-command-setup.mjs', '.github/workflows/telegram-command-setup.yml']
+permissions:
+  contents: read
+concurrency:
+  group: telegram-command-setup
+  cancel-in-progress: false
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/telegram-risk.test.mjs tests/telegram-commands.test.mjs
+      - name: Register command webhook when server secrets are ready
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node scripts/telegram-command-setup.mjs
