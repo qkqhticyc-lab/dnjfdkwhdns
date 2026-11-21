@@ -51,14 +51,17 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: telegram-risk-state
+          overwrite: true
           path: .cache/telegram-risk/state.json
           include-hidden-files: true
           retention-days: 90
       - uses: actions/upload-artifact@v4
         with:
           name: telegram-risk-preview
+          overwrite: true
           path: |
             .cache/telegram-risk/preview.txt
             .cache/telegram-risk/report.json
+            .cache/telegram-risk/preview.html
           include-hidden-files: true
           retention-days: 14

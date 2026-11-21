@@ -6,6 +6,7 @@ let state={schemaVersion:1,sent:[]};
 try{state=JSON.parse(await readFile(dir+'/state.json','utf8'));if(state.schemaVersion!==1||!Array.isArray(state.sent))throw Error('Invalid notification state');}catch(e){if(e.code!=='ENOENT')throw e;}
 const report=await collect(),message=formatReport(report,state.last);
 await writeFile(dir+'/report.json',JSON.stringify(report,null,2));await writeFile(dir+'/preview.txt',message);
+await writeFile(dir+'/preview.html','<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>텔레그램 메시지 미리보기</title><style>body{margin:0;background:#e5eef0;color:#18252c;font:15px/1.6 Arial,sans-serif}article{max-width:360px;margin:16px auto;padding:18px;background:white;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere;box-sizing:border-box}pre{font:12px/1.7 monospace;white-space:pre;overflow-x:auto;margin:8px 0;padding:10px 4px;background:#f1f5f7;border-radius:6px}blockquote{margin:10px 0;padding:8px 12px;border-left:3px solid #d76640;background:#fff4ed}i{font-size:12px;color:#52646e}</style><article>'+message+'</article></html>');
 console.log(message);
 if(process.argv.includes('--send')){
  if(shouldDeliver(report,state)){

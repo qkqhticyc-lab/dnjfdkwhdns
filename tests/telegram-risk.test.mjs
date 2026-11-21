@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {RULES,assess,parseCboe,parseYahoo,completed,nyClock,formatReport,deliveryKey,shouldDeliver,deliver} from '../telegram-risk/core.mjs';
+import {RULES,assess,parseCboe,parseYahoo,completed,nyClock,formatReport,deliveryKey,shouldDeliver,deliver,columnWidth} from '../telegram-risk/core.mjs';
 const now=new Date('2026-11-21T03:00:00Z');
 function fixture({vix=20,spread=3,long=2,short=-2,spx=100,move=80,previousMove=80}={}){
  const values={VIX:vix,VIX3M:vix+spread,VIX6M:vix+spread+long,VIX9D:vix+short,VVIX:100,SKEW:150,MOVE:move,DXY:101,SPX:spx};
@@ -51,8 +51,20 @@ test('SPX structure is explicit, 30 weeks and ATR/ADX use only the as-of prefix'
 test('ledger suppresses repeated reports; failed or dry-run delivery cannot mark sent',async()=>{
  const a=assess(fixture(),{now}),state={sent:[deliveryKey(a)]};assert.equal(shouldDeliver(a,state),false);assert.equal(shouldDeliver(a,{sent:[]}),true);
  const message=formatReport(a,{stage:'tension'});assert.match(message,/긴장 구간 → 안정 구간/);assert.ok(message.length<4096);
- let body;await deliver(message,{token:'fake-secret',chatId:'fake-chat',fetcher:async(url,options)=>{body=JSON.parse(options.body);return {ok:true,json:async()=>({ok:true})};}});assert.equal(body.text,message);assert.equal(body.chat_id,'fake-chat');
+ let body;await deliver(message,{token:'fake-secret',chatId:'fake-chat',fetcher:async(url,options)=>{body=JSON.parse(options.body);return {ok:true,json:async()=>({ok:true})};}});assert.equal(body.text,message);assert.equal(body.chat_id,'fake-chat');assert.equal(body.parse_mode,'HTML');
  await assert.rejects(deliver(message,{token:'fake-secret',chatId:'x',fetcher:async()=>{throw Error('url contains fake-secret');}}),e=>!e.message.includes('fake-secret'));
  await assert.rejects(deliver(message,{token:'x',chatId:'x',fetcher:async()=>({ok:false,status:403,json:async()=>({ok:false,error_code:403,description:'private token x'})})}),/HTTP 403/);
  assert.deepEqual(state.sent,[deliveryKey(a)]);
+});
+test('beginner report is mobile-sized, escaped HTML and specific to each stage',()=>{
+ const reports=[assess(fixture(),{now}),assess(fixture({spread:.8}),{now}),assess(fixture({spread:-3}),{now}),assess(fixture({spread:-3,move:106,previousMove:95}),{now}),assess({},{now})];
+ for(const report of reports){
+  const message=formatReport(report);assert.ok(message.length<4096);assert.match(message,/<blockquote>/);assert.match(message,/용어를 쉽게 보면/);assert.match(message,/방향이 아닌 추세 강도/);
+  for(const block of message.matchAll(/<pre>(.*?)<\/pre>/gs))for(const line of block[1].split('\n'))assert.ok(columnWidth(line)<=31,`${columnWidth(line)} columns: ${line}`);
+ }
+ assert.match(formatReport(reports[0]),/복합 위험 신호가 잡히지/);
+ assert.match(formatReport(reports[3]),/주식시장 불안과 채권 변동성 급등/);
+ assert.match(formatReport(reports[4]),/판단을 보류/);
+ assert.doesNotMatch(formatReport({...reports[0],asOf:'<bad&date>'},{stage:'<fake>'}),/<bad|<fake>/);
+ assert.equal(shouldDeliver(reports[0],{sent:[`1:${reports[0].asOf}:stable`]}),true);
 });

@@ -38,3 +38,9 @@ Then run **Telegram market risk** manually. It otherwise runs 22:35/23:35 UTC on
 It sends at most once per reference day/rule-version/stage. A later same-day stage change can send another report. State is persisted in an Actions artifact for 90 days, restored from the last successful run; failure to restore stops sending rather than resetting the ledger. A successful Telegram response is required before advancing the ledger. Telegram has no atomic transaction with artifact persistence: interruption after delivery but before artifact upload can duplicate a message; an ambiguous network outcome stops the job for manual checking. No automatic retry after ambiguous delivery. Do not enable multiple copies of this workflow for the same chat.
 
 The default is preview-only. Source dates, missing inputs, rule version and explicit structure benchmark appear in each report. This initial heuristic has screenshot fixtures and data integrity tests, not historical predictive validation.
+
+## Message format v2
+
+Telegram HTML: bold Korean headings, a short stage-specific explanation in a blockquote, explicit reasons, three narrow monospace tables (31 columns maximum), and a beginner glossary. `parse_mode: HTML` is required; dynamic text is escaped. Colors in the legend map to Korean table statuses. The preview artifact includes an HTML approximation for layout QA; actual font rendering depends on the Telegram client. The logical formula, risk thresholds and rule version are unchanged.
+
+Delivery keys include a message-format version. Upgrading from the original plain-text message intentionally sends the reformatted current report once, then deduplicates subsequent runs. No ledger reset or repeated force-send is used.
