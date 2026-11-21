@@ -44,3 +44,5 @@ The default is preview-only. Source dates, missing inputs, rule version and expl
 Telegram HTML: bold Korean headings, a short stage-specific explanation in a blockquote, explicit reasons, three narrow monospace tables (31 columns maximum), and a beginner glossary. `parse_mode: HTML` is required; dynamic text is escaped. Colors in the legend map to Korean table statuses. The preview artifact includes an HTML approximation for layout QA; actual font rendering depends on the Telegram client. The logical formula, risk thresholds and rule version are unchanged.
 
 Delivery keys include a message-format version. Upgrading from the original plain-text message intentionally sends the reformatted current report once, then deduplicates subsequent runs. No ledger reset or repeated force-send is used.
+
+Format v3 places each colored signal light directly in its table row's judgment cell (e.g. `🔴 경계`), including a white light for unavailable data. The separate color legend is removed. Emoji column widths are included in narrow-table padding. Upgrading sends the corrected current report once.

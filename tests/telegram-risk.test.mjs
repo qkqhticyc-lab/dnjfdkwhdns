@@ -60,6 +60,9 @@ test('beginner report is mobile-sized, escaped HTML and specific to each stage',
  const reports=[assess(fixture(),{now}),assess(fixture({spread:.8}),{now}),assess(fixture({spread:-3}),{now}),assess(fixture({spread:-3,move:106,previousMove:95}),{now}),assess({},{now})];
  for(const report of reports){
   const message=formatReport(report);assert.ok(message.length<4096);assert.match(message,/<blockquote>/);assert.match(message,/용어를 쉽게 보면/);assert.match(message,/방향이 아닌 추세 강도/);
+  const signalTable=[...message.matchAll(/<pre>(.*?)<\/pre>/gs)][1][1];
+  assert.equal(signalTable.split('\n').slice(1).every(line=>/[🟢🟡🔴⚪] (양호|주의|경계|보류)$/u.test(line)),true);
+  assert.doesNotMatch(message,/🟢 양호 · 🟡 주의 · 🔴 경계/);
   for(const block of message.matchAll(/<pre>(.*?)<\/pre>/gs))for(const line of block[1].split('\n'))assert.ok(columnWidth(line)<=31,`${columnWidth(line)} columns: ${line}`);
  }
  assert.match(formatReport(reports[0]),/복합 위험 신호가 잡히지/);

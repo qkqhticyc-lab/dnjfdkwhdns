@@ -55,10 +55,10 @@ export function assess(series,{now=new Date(),rules=RULES}={}){
 }
 const num=(n,d=1)=>finite(n)?n.toFixed(d):'미확인';
 const signed=(n,d=1)=>finite(n)?`${n>0?'+':''}${n.toFixed(d)}`:'미확인';
-export const REPORT_FORMAT_VERSION=2;
+export const REPORT_FORMAT_VERSION=3;
 const escapeHTML=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 // Korean is two columns wide in a monospace block. Keep rows <= 31 columns.
-export const columnWidth=s=>[...String(s)].reduce((w,c)=>w+(/[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7af\uff01-\uff60]/u.test(c)?2:1),0);
+export const columnWidth=s=>[...String(s)].reduce((w,c)=>w+(/[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7af\uff01-\uff60]|\p{Extended_Pictographic}/u.test(c)?2:1),0);
 const cell=(s,width,right=false)=>{s=String(s);const spaces=' '.repeat(Math.max(0,width-columnWidth(s)));return right?spaces+s:s+spaces;};
 const table=(headers,rows,widths)=>'<pre>'+escapeHTML([headers,...rows].map(row=>row.map((s,i)=>cell(s,widths[i],i>0)).join(' ')).join('\n'))+'</pre>';
 const explanations={
@@ -72,7 +72,7 @@ export function formatReport(report,previous){
  const s=STAGES[report.stage],t=report.technical;
  const transition=previous?.stage&&previous.stage!==report.stage?`\n단계 변화: ${escapeHTML(STAGES[previous.stage]?.[2]||previous.stage)} → ${s[2]}`:'';
  const metricRows=[['주식 불안 VIX','VIX'],['불안 변동 VVIX','VVIX'],['꼬리위험 SKEW','SKEW'],['채권 변동 MOVE','MOVE'],['달러 강도 DXY','DXY']].map(([label,id])=>[label,num(report.values[id]?.value),finite(report.values[id]?.change)?signed(report.values[id].change,2)+'%':'미확인']);
- const lightText={green:'양호',yellow:'주의',red:'경계',unknown:'보류'};
+ const lightText={green:'🟢 양호',yellow:'🟡 주의',red:'🔴 경계',unknown:'⚪ 보류'};
  const curveRows=[['3개월−30일',signed(report.curve),lightText[report.lights.curve]],['6개월−3개월',signed(report.long),lightText[report.lights.long]],['30일/3개월',num(report.ratio,3),lightText[report.lights.ratio]],['9일−30일',signed(report.short),lightText[report.lights.short]]];
  const reasons=[];
  if(report.reasons.includes('BACKWARDATION'))reasons.push('• 단기 변동성 역전: 향후 30일의 주가 변동 우려가 향후 3개월 평균보다 큽니다.');
@@ -85,7 +85,7 @@ export function formatReport(report,previous){
  const strength=!finite(t?.adx)?'추세 강도 미확인':t.adx<20?'추세 강도 약함':t.adx<25?'추세가 형성되는 구간':'추세 강도 높음';
  const direction=!finite(t?.minusDI)||!finite(t?.plusDI)?'방향 미확인':t.minusDI>t.plusDI?'하락 방향 우세':t.plusDI>t.minusDI?'상승 방향 우세':'방향 균형';
  const arrow=value=>value==null?'':value?' ↑':' ↓';
- return `<b>시장 리스크 보드 · 미국 마감</b>\n${escapeHTML(report.asOf||'기준일 미확인')} 미국 거래일 · 종가 기준\n\n<b>${s[0]} ${s[2]} · ${s[1]}</b>${transition}\n<blockquote>${explanations[report.stage]}</blockquote>\n\n<b>① 왜 이런 단계인가요?</b>\n${reasons.map(escapeHTML).join('\n')}\n\n<b>② 주요 지표</b>\n${table(['지표','현재','변화율'],metricRows,[14,7,8])}\n전일 대비는 지표 자체의 변화율입니다.\n\n<b>③ 기간별 불안 신호</b>\n🟢 양호 · 🟡 주의 · 🔴 경계\n${table(['비교 항목','값','판정'],curveRows,[14,7,4])}\n${report.curve==null?'기간별 변동성 비교 자료가 부족합니다.':report.curve<0?'단기 역전 상태: 가까운 시기의 불안이 더 큽니다.':report.structure==='NEAR_BACKWARDATION'?'단기 역전 근접: 불안이 높아지는지 관찰합니다.':'정상 기울기: 단기 불안의 역전은 없습니다.'}\n\n<b>④ 실제 주가 흐름 · S&amp;P 500</b>\n${trend} · ${direction}\n${strength}\n${table(['지표','값'],[['평균 변동 ATR',num(t?.atr)+arrow(t?.atrRising)],['추세 강도 ADX',num(t?.adx)+arrow(t?.adxRising)],['하락 힘 −DI',num(t?.minusDI)],['상승 힘 +DI',num(t?.plusDI)]],[14,9])}\nATR은 하루 변동폭의 평균값(pt), ADX는 방향이 아닌 추세 강도입니다. ↑↓는 전일 대비입니다.\n\n<b>용어를 쉽게 보면</b>\n• VIX: 앞으로 30일간의 주가 변동 예상\n• VVIX: VIX 자체가 흔들릴 것으로 보는 정도\n• SKEW: 극단적 가격 변동에 대비한 옵션 가격 반영\n• MOVE: 채권 금리의 변동 불안\n• DXY: 주요 통화 대비 달러의 강도\n\n<i>자체 추정 규칙 v${report.ruleVersion} · 위험 단계는 폭락 확률이나 매매 지시를 뜻하지 않습니다.</i>`;
+ return `<b>시장 리스크 보드 · 미국 마감</b>\n${escapeHTML(report.asOf||'기준일 미확인')} 미국 거래일 · 종가 기준\n\n<b>${s[0]} ${s[2]} · ${s[1]}</b>${transition}\n<blockquote>${explanations[report.stage]}</blockquote>\n\n<b>① 왜 이런 단계인가요?</b>\n${reasons.map(escapeHTML).join('\n')}\n\n<b>② 주요 지표</b>\n${table(['지표','현재','변화율'],metricRows,[14,7,8])}\n전일 대비는 지표 자체의 변화율입니다.\n\n<b>③ 기간별 불안 신호</b>\n${table(['비교 항목','값','판정'],curveRows,[14,7,7])}\n${report.curve==null?'기간별 변동성 비교 자료가 부족합니다.':report.curve<0?'단기 역전 상태: 가까운 시기의 불안이 더 큽니다.':report.structure==='NEAR_BACKWARDATION'?'단기 역전 근접: 불안이 높아지는지 관찰합니다.':'정상 기울기: 단기 불안의 역전은 없습니다.'}\n\n<b>④ 실제 주가 흐름 · S&amp;P 500</b>\n${trend} · ${direction}\n${strength}\n${table(['지표','값'],[['평균 변동 ATR',num(t?.atr)+arrow(t?.atrRising)],['추세 강도 ADX',num(t?.adx)+arrow(t?.adxRising)],['하락 힘 −DI',num(t?.minusDI)],['상승 힘 +DI',num(t?.plusDI)]],[14,9])}\nATR은 하루 변동폭의 평균값(pt), ADX는 방향이 아닌 추세 강도입니다. ↑↓는 전일 대비입니다.\n\n<b>용어를 쉽게 보면</b>\n• VIX: 앞으로 30일간의 주가 변동 예상\n• VVIX: VIX 자체가 흔들릴 것으로 보는 정도\n• SKEW: 극단적 가격 변동에 대비한 옵션 가격 반영\n• MOVE: 채권 금리의 변동 불안\n• DXY: 주요 통화 대비 달러의 강도\n\n<i>자체 추정 규칙 v${report.ruleVersion} · 위험 단계는 폭락 확률이나 매매 지시를 뜻하지 않습니다.</i>`;
 }
 export function deliveryKey(report){return `${report.ruleVersion}:${report.asOf}:${report.stage}:format${REPORT_FORMAT_VERSION}`;}
 export function shouldDeliver(report,state){return report.stage!=='warning'&&!report.stale&&!state?.sent?.includes(deliveryKey(report));}
