@@ -49,6 +49,7 @@ jobs:
       - run: npm run collect:credit
       - run: npm run collect:indicators
       - run: node scripts/collect-indicator-history.mjs
+      - run: node scripts/collect-market-breadth.mjs
       - name: Download latest completed full scan
         env:
           GH_TOKEN: ${{ github.token }}

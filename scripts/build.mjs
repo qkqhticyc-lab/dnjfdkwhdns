@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
 import { mkdir, copyFile, readFile, writeFile, readdir } from 'node:fs/promises';
+import {gunzipSync} from 'node:zlib';
 import {fingerprintAssets} from './fingerprint-assets.mjs';
 const config=JSON.parse(await readFile('site.config.json','utf8'));
 const key=config.supabase?.publishableKey||'';
@@ -9,6 +10,10 @@ await mkdir('dist',{recursive:true});
 await build({entryPoints:['app.js'],bundle:true,outfile:'dist/app.js',format:'esm',target:['es2022'],minify:true,legalComments:'eof'});
 for(const file of ['lounge.html','lounge.css','chart-compare.html','chart-compare.css','chart-news.css','screener.html','screener.css','chart-workspace.css','chart-guide.css','flow-overview.css','club.html','club.css','index.html','etfs.html','etfs.css','reports.html','community.html','journals.html','journals.css','credit.html','credit.css','charts.html','quotes-charts.css','chart-analysis.css','sentiment.css','styles.css','site-pages.css','site.config.json','.nojekyll'])await copyFile(file,'dist/'+file);
 await mkdir('dist/data',{recursive:true});
+await copyFile('market-breadth.css','dist/market-breadth.css');
+const {validateBreadth}=await import('../market-breadth-core.mjs');
+let breadth;try{breadth=JSON.parse(await readFile('data/market-breadth.json','utf8'));}catch(e){if(e.code!=='ENOENT')throw e;breadth=JSON.parse(gunzipSync(await readFile('data/market-breadth.seed.json.gz')).toString('utf8'));}if(!validateBreadth(breadth))throw Error('Invalid market breadth data');
+await writeFile('dist/data/market-breadth.json',JSON.stringify(breadth));
 await copyFile('news.html','dist/news.html');
 await copyFile('news.css','dist/news.css');
 const {validateMarketNews}=await import('../market-news-core.mjs');

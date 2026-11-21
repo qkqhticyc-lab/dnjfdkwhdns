@@ -6,4 +6,5 @@ dist/
 CONTINUE.md
 .cache/
 data/*.tmp
+data/market-breadth.json
 supabase/.temp/

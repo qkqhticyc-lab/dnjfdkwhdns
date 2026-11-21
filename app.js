@@ -16,6 +16,7 @@ import {initCharts} from './charts.js';
 import {initChartCompare} from './chart-compare.js';
 import {initNavigation} from './navigation.js';
 import {initSentiment} from './sentiment.js';
+import {initMarketBreadth} from './market-breadth.js';
 if(location.hash==='#reading')location.replace('./reports.html');
 if(location.hash==='#community')location.replace('./community.html');
 fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).then(async config=>{
@@ -27,7 +28,7 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  const community=page==='community'?initCommunity(config):null;
  // Public market data starts independently of account/session initialization.
  const club=page==='club'?initClub(config):null;
- const market=page==='market'?Promise.all([initMarket(config),initIndicators(config),initSentiment()]):null;
+ const market=page==='market'?Promise.all([initMarket(config),initIndicators(config),initSentiment(),initMarketBreadth()]):null;
  const compare=page==='chart-compare'?initChartCompare(config):null;
  const news=page==='news'?initNews():null;
  const lounge=page==='lounge'?initLounge(config):null;
