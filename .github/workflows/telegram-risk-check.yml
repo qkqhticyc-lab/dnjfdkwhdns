@@ -1,0 +1,22 @@
+name: Verify Telegram current values
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/telegram-risk-check.mjs', '.github/workflows/telegram-risk-check.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify deployed server data and send one test report when quotes are available
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node scripts/telegram-risk-check.mjs --send-test

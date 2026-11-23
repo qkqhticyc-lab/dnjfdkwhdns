@@ -24,21 +24,21 @@ export function assessLatest(quotes,closedSpx,{now=new Date()}={}){
  return {...report,mode:'latest',quotes,inSession,technicalAsOf:technical?.date||null};
 }
 export async function collectLatest({fetcher=fetch,now=new Date()}={}){
- const quotes={};let spx=[];
+ const quotes={},sourceErrors=[];let spx=[];
  await Promise.all(Object.entries(LATEST_SYMBOLS).map(async([id,symbol])=>{
   try{
    const cboe=!['SPX','MOVE','DXY'].includes(id);
    const historyURL=cboe?`https://cdn.cboe.com/api/global/us_indices/daily_prices/${id}_History.csv`:'https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?range=2y&interval=1d';
    const [r,h]=await Promise.all([fetcher('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?range=1d&interval=5m',{signal:AbortSignal.timeout(12000)}),fetcher(historyURL,{signal:AbortSignal.timeout(12000)})]);
-   if(!r.ok)throw Error('Quote unavailable');const quote=parseLatest(await r.json(),now);
+   if(!r.ok)throw Error('Quote HTTP '+r.status);if(!h.ok)sourceErrors.push({id,part:'history',status:h.status});const quote=parseLatest(await r.json(),now);
    const history=h.ok?(cboe?parseCboe(await h.text()):parseYahoo(await h.json())):[];
    // Provider meta previousClose can refer to a different baseline. Use the
    // same canonical preceding daily close as the scheduled report instead.
    quote.previous=history.filter(p=>p.date<quote.date).at(-1)?.close??null;
    quotes[id]=quote;if(id==='SPX')spx=history;
-  }catch{}
+  }catch(e){sourceErrors.push({id,part:'quote',reason:String(e.message).slice(0,120)});}
  }));
- return assessLatest(quotes,spx,{now});
+ return {...assessLatest(quotes,spx,{now}),sourceErrors};
 }
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const kst=at=>new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(at));

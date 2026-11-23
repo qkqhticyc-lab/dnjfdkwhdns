@@ -8,13 +8,14 @@ export function makeWebhook({token,chatId,getLatest=collectLatest,getClose=colle
  // A warm instance coalesces Telegram retries. It is a read-only endpoint.
  const updates=new Map();let latestCache,closeCache;
  return async req=>{
-  if(req.method==='GET')return Response.json({service:'telegram-risk',configured:!!token&&!!chatId});
+  if(req.method==='GET')return Response.json({service:'telegram-risk',configured:!!token&&!!chatId,serverTime:new Date().toISOString()});
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
   if(!token||!chatId)return new Response('Configuration required',{status:503});
   if(!equal(req.headers.get('x-telegram-bot-api-secret-token'),await webhookSecret(token)))return new Response('Unauthorized',{status:401});
   if(Number(req.headers.get('content-length'))>16384)return new Response('Too large',{status:413});
   let u;try{const body=await req.text();if(body.length>16384)return new Response('Too large',{status:413});u=JSON.parse(body);}catch{return new Response('Invalid request',{status:400});}
   if(u.type==='setup_check')return Response.json({ok:String(u.chat_id)===String(chatId)});
+  if(u.type==='diagnostics'&&String(u.chat_id)===String(chatId)){const report=await getLatest();return Response.json({report,html:formatLatest(report)});}
   if(u.message?.chat?.type!=='private'||String(u.message.chat.id)!==String(chatId)||!Number.isSafeInteger(u.update_id))return Response.json({ok:true});
   const kind=command(u.message.text);if(!kind)return Response.json({ok:true});
   if(updates.has(u.update_id))return Response.json({ok:true});
