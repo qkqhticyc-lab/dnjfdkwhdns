@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {parseLatest,assessLatest,formatLatest,collectLatest} from '../telegram-risk/latest.mjs';
 import {makeWebhook,webhookSecret,command} from '../telegram-risk/webhook.mjs';
+import {validClose} from '../telegram-risk/cache.mjs';
 const now=new Date('2026-11-20T16:00:00Z');
 function quotes(){return Object.fromEntries(Object.entries({VIX:20,VIX3M:23,VIX6M:25,VIX9D:18,VVIX:100,SKEW:150,MOVE:80,DXY:101,SPX:6900}).map(([id,value])=>[id,{value,previous:value,at:'2026-11-20T15:55:00Z',date:'2026-11-20'}]));}
 test('latest quote validation and exact timestamps, no future quotes',()=>{
@@ -50,4 +51,45 @@ test('close request and outages return useful replies without disclosing credent
  const j=await (await handler(req('마감'))).json();assert.match(j.text,/조회에 실패/);assert.doesNotMatch(j.text,/fake-token/);
  const h=await(await handler(req('/help'))).json();assert.match(h.text,/\/risk/);
  const off=makeWebhook({});assert.equal((await off(req('위험'))).status,503);
+});
+
+test('history failure preserves valid current quotes and their provider baseline',async()=>{
+ const fetcher=async url=>{
+  if(url.includes('interval=5m'))return Response.json({chart:{result:[{meta:{regularMarketPrice:110,regularMarketTime:now.getTime()/1000,previousClose:100}}]}});
+  throw Error('history unavailable');
+ };
+ const r=await collectLatest({fetcher,now,backoff:false});
+ assert.equal(Object.keys(r.quotes).length,9);assert.equal(r.quotes.VIX.previous,100);assert.equal(r.quotes.SPX.value,110);
+ assert.equal(r.sourceErrors.filter(e=>e.part==='history').length,9);
+});
+
+test('provider 429 backs off, delayed fallback survives and old closes never become live curves',async()=>{
+ const old=assessLatest(quotes(),[],{now});const archive={...old,mode:'close'};
+ let yahooCalls=0;
+ const fetcher=async url=>{
+  if(url.includes('yahoo.com')){yahooCalls++;return new Response('',{status:429});}
+  if(url.includes('.csv'))return new Response('DATE,CLOSE\n11/19/2026,19\n11/20/2026,20');
+  return Response.json({closePrice:'21',compareToPreviousClosePrice:'1',localTradedAt:'2026-11-20T10:55:00-05:00',delayTime:15});
+ };
+ const r=await collectLatest({fetcher,now,archive});
+ assert.equal(yahooCalls,1);assert.equal(Object.keys(r.quotes).length,2);assert.equal(Object.keys(r.displayQuotes).length,9);
+ assert.equal(r.quotes.VIX.value,21);assert.equal(r.displayQuotes.VIX3M.basis,'close');assert.equal(r.displayQuotes.MOVE.source,'Last verified close');
+ assert.equal(r.curve,null);assert.equal(r.stage,'warning');
+ const text=formatLatest(r);assert.match(text,/현재 판정이 아닙니다/);assert.match(text,/11-19 마감/);assert.match(text,/Naver|같은 시각/);assert.ok(text.length<4096);
+ const again=await collectLatest({fetcher,now,archive});assert.equal(yahooCalls,1);assert.equal(again.quotes.SPX.value,21);
+});
+
+test('close cache accepts only complete dated closes, protects writes and passes archive to queries',async()=>{
+ const archive={...assessLatest(quotes(),[],{now}),mode:'close'};
+ assert.equal(validClose(archive),true);assert.equal(validClose({...archive,mode:'latest'}),false);
+ assert.equal(validClose({...archive,values:{}}),false);assert.equal(validClose({...archive,asOf:'2099-01-01'}),false);
+ let saved=0,received;
+ const secret=await webhookSecret('fake-token');
+ const h=makeWebhook({token:'fake-token',chatId:'123',archiveStore:{load:async()=>archive,save:async()=>{saved++;}},getLatest:async options=>{received=options.archive;return assessLatest(quotes(),[],{now});}});
+ const post=(body,auth=secret)=>new Request('https://example.test',{method:'POST',headers:{'x-telegram-bot-api-secret-token':auth},body:JSON.stringify(body)});
+ assert.equal((await h(post({type:'publish_close',chat_id:123,report:archive},'wrong'))).status,401);
+ await h(post({type:'publish_close',chat_id:456,report:archive}));assert.equal(saved,0);
+ assert.equal((await h(post({type:'publish_close',chat_id:123,report:{...archive,values:{}}}))).status,400);
+ assert.equal((await h(post({type:'publish_close',chat_id:123,report:archive}))).status,200);assert.equal(saved,1);
+ await h(post({type:'diagnostics',chat_id:123}));assert.deepEqual(received,archive);
 });
