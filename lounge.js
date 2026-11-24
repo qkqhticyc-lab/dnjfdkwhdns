@@ -40,19 +40,19 @@ export async function initLounge(config){
     const lastDay=points.at(-1)?.at?.slice(0,8);
     points=points.filter(point=>point.at?.startsWith(lastDay)&&Number.isFinite(point.price));
     let caption='';
-    if(points.length){caption='최근 분봉 '+lastDay.replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3')+' · '+points[0].at.slice(8,10)+':'+points[0].at.slice(10,12)+' ~ '+points.at(-1).at.slice(8,10)+':'+points.at(-1).at.slice(10,12)+' 현지시간';}
+    if(points.length){caption=(item.chartSampled?'실제 수신 시세 표본 ':'최근 분봉 ')+lastDay.replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3')+' · '+points[0].at.slice(8,10)+':'+points[0].at.slice(10,12)+' ~ '+points.at(-1).at.slice(8,10)+':'+points.at(-1).at.slice(10,12)+' 현지시간'+(item.provider?' · '+item.provider:'');}
     else{points=(daily(primary)?.points||[]).slice(-30).map(point=>({price:point.close,at:point.date}));caption='최근 '+points.length+'개 일봉 · '+(daily(primary)?.asOf||'기준일 미제공');}
-    if(points.length){
+    if(points.length>1){
       const width=700,height=130,left=4,right=696,top=8,bottom=108,values=points.map(point=>point.price),low=Math.min(...values),high=Math.max(...values),padding=(high-low||high*.002)*.15,min=low-padding,max=high+padding;
       const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.classList.add('lounge-chart-svg');svg.setAttribute('role','img');svg.setAttribute('aria-label',INDICATORS.find(def=>def.id===primary)?.name+' '+caption);
       const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',points.map((point,index)=>(index?'L':'M')+(left+index/Math.max(1,points.length-1)*(right-left)).toFixed(2)+','+(bottom-(point.price-min)/(max-min)*(bottom-top)).toFixed(2)).join(' '));path.setAttribute('fill','none');path.setAttribute('stroke',item.changePercent>=0?'#d6535e':'#4e85cf');path.setAttribute('stroke-width','2');svg.append(path);
       priceCrosshair(svg,{left,right,top,bottom,min,max,format:number});host.append(svg);
-    }
+    }else empty(host,item.chartDelayed?'분봉 제공이 지연되고 있습니다. 마지막 확인값과 기준 시각을 표시합니다.':'시세 표본을 모으고 있습니다. 아래 지수는 확인된 최신 제공값입니다.');
     host.append(element('p',caption,'lounge-meta'));
     const direction=Number.isFinite(item.changePercent)?item.changePercent>0?'상승':item.changePercent<0?'하락':'보합':'등락 확인 중';
     host.append(element('p',(market==='KR'?'코스피':'S&P 500')+' '+direction+(item.marketStatus==='OPEN'?' 흐름':item.marketStatus==='CLOSE'?' 마감 기준':' · 최근 제공 기준'),'lounge-hero-title'));
     const quoteHost=$('lounge-quotes');quoteHost.replaceChildren();
-    for(const id of [primary,secondary]){const quote=current(id),box=element('div',null,'lounge-quote');box.append(element('small',INDICATORS.find(def=>def.id===id)?.name),element('strong',number(quote?.price)),element('span',percent(quote?.changePercent),tone(quote?.changePercent)),element('p',quote?.quoteAt?'시세 '+meta(quote.quoteAt,quote.status==='stale')+(quote.delayMinutes>0?' · '+quote.delayMinutes+'분 지연':''):'일봉 '+(quote?.asOf||'미제공'),'lounge-meta'));quoteHost.append(box);}
+    for(const id of [primary,secondary]){const quote=current(id),box=element('div',null,'lounge-quote');box.append(element('small',INDICATORS.find(def=>def.id===id)?.name),element('strong',number(quote?.price)),element('span',percent(quote?.changePercent),tone(quote?.changePercent)),element('p',quote?.quoteAt?'시세 '+meta(quote.quoteAt,quote.status==='stale')+(quote.delayLabel?' · '+quote.delayLabel:'')+(quote.provider?' · '+quote.provider:''):quote?.chartDelayed?'원본 분봉 갱신 지연 · 최신 시세 확인 중':'일봉 '+(quote?.asOf||'미제공'),'lounge-meta'));quoteHost.append(box);}
     const snapshot=stocks(),groups=loungeSectors(snapshot.rows,classifications()),sectors=$('lounge-sector');sectors.replaceChildren();sectors.className='lounge-sector';
     if(groups.length){sectors.append(element('b','업종 표본 · '+snapshot.asOf));for(const group of [...groups.slice(0,2),...groups.slice(-2)].filter((group,index,list)=>list.findIndex(other=>other.id===group.id)===index)){const chip=element('span',SECTORS[group.id]+' '+percent(group.average),tone(group.average));chip.title='유동성 기준 통과 '+group.count+'종목의 당일 등락률 단순 평균';sectors.append(chip);}}
   }
@@ -136,6 +136,7 @@ export async function initLounge(config){
   window.addEventListener('storage',event=>{if(event.key===NOTIFICATION_KEY)renderAlerts();});
   window.addEventListener('investment-notifications-change',renderAlerts);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadLive();});
+  window.addEventListener('focus',()=>{if(!document.hidden)loadLive();});
   draw();setInterval(()=>{if(!document.hidden)loadLive();},30000);setInterval(()=>{if(!document.hidden)loadStored();},300000);
   await Promise.all([loadStored(),loadLive()]);
 }
