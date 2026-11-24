@@ -7,7 +7,7 @@ test('Pages deploy uses the exact uploaded artifact ID, tolerates propagation an
   const s=String(url);assert.ok(!s.includes('test-only'));
   if(s.endsWith('/actions/artifacts/34'))return ++reads===1?new Response('',{status:404}):Response.json({workflow_run:{id:12},expired:false});
   if(s.startsWith('https://identity.example/'))return Response.json({value:'test-oidc'});
-  if(options.method==='POST'){posts++;assert.deepEqual(JSON.parse(options.body),{artifact_id:'34',pages_build_version:'sha',oidc_token:'test-oidc'});return Response.json({id:'deployment',page_url:'https://owner.github.io/repo/'});}
+  if(options.method==='POST'){posts++;assert.deepEqual(JSON.parse(options.body),{artifact_id:34,pages_build_version:'sha',oidc_token:'test-oidc'});return Response.json({id:'deployment',page_url:'https://owner.github.io/repo/'});}
   if(s.endsWith('/pages/deployments/deployment'))return Response.json({status:++polls===1?'deployment_in_progress':'succeed'});
   throw Error('Unexpected request '+s);
  };
