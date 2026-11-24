@@ -1,7 +1,7 @@
 import{listScreenUniverse,screenKey}from'../screener-core.mjs';
 import {screenMarketDates} from '../screener-freshness.mjs';
 import{readFile,writeFile}from'node:fs/promises';
-const candidates=[];for(const path of['data/screener.json','.cache/screener-full/screener.json'])try{candidates.push(JSON.parse(await readFile(path,'utf8')));}catch{}
+const candidates=[];for(const path of['data/screener.json','.cache/screener-full/screener.json'])try{const candidate=JSON.parse(await readFile(path,'utf8'));if(path.startsWith('.cache/')){try{const source=JSON.parse(await readFile('.cache/screener-full/source.json','utf8'));if(Number.isSafeInteger(source.databaseId)&&Number.isSafeInteger(source.attempt)){candidate.scanRunId=source.databaseId;candidate.scanAttempt=source.attempt;}}catch{}}candidates.push(candidate);}catch{}
 try{candidates.push(await fetch('https://qkqhticyc-lab.github.io/dnjfdkwhdns/data/screener.json',{signal:AbortSignal.timeout(15000)}).then(r=>r.json()));}catch{}
 const valid=candidates.filter(d=>d.schemaVersion===1&&d.rulesVersion==='independent-v3'&&Array.isArray(d.items)&&d.items.length&&Array.isArray(d.coverage));
 valid.sort((a,b)=>Number(b.universeScope==='all-provider-listed')-Number(a.universeScope==='all-provider-listed')||b.collectedAt.localeCompare(a.collectedAt));if(!valid.length)throw Error('No valid screener data');

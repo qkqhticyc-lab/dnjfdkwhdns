@@ -44,6 +44,6 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  if(news)await news;
  if(lounge)await lounge;
  if(sectorMap)await sectorMap;
- if(page==='screener'){initSignalStudy();await initScreener();}
+ if(page==='screener'){initSignalStudy();await initScreener(config);}
  if(page==='etfs')await initETFs();
 }).catch(()=>{const box=document.createElement('p');box.className='member-status is-error';box.textContent='서비스 연결을 확인하지 못했습니다. 잠시 후 새로고침해 주세요.';document.querySelector('main').prepend(box);});

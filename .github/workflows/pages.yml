@@ -57,7 +57,11 @@ jobs:
         run: |
           scan_id=$(gh run list --workflow screener.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           if [ -n "$scan_id" ]; then
-            gh run download "$scan_id" --name screener-full --dir .cache/screener-full || echo 'Full scan download unavailable; keeping published data.'
+            if gh run download "$scan_id" --name screener-full --dir .cache/screener-full; then
+              gh run view "$scan_id" --json databaseId,attempt > .cache/screener-full/source.json
+            else
+              echo 'Full scan download unavailable; keeping published data.'
+            fi
           fi
       - run: node scripts/load-screener.mjs
       - name: Request catch-up scan for delayed closed markets
