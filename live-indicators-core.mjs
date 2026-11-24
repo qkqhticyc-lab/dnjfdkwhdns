@@ -46,7 +46,7 @@ export async function collectAlternateIndicator(def,fetcher=fetch,now=new Date()
 export function indicatorChartLag(item){
  if(!US_SYMBOLS[item.id]||item.marketStatus!=='OPEN')return false;
  const quote=item.quoteAt&&Number.isFinite(Date.parse(item.quoteAt))?localStamp(new Date(item.quoteAt)):null,last=item.points?.at(-1)?.at;
- if(!quote||quote.slice(8,12)<'0933'||quote.slice(8,12)>'1600')return false;
+ if(!quote||quote.slice(8,12)<'0930'||quote.slice(8,12)>'1600')return false;
  if(!last||last.slice(0,8)!==quote.slice(0,8))return true;
  const minutes=s=>Number(s.slice(8,10))*60+Number(s.slice(10,12));return minutes(quote)-minutes(last)>3;
 }

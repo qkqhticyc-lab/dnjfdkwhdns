@@ -33,6 +33,7 @@ test('selected-market collection never waits on unrelated markets',async()=>{
 
 test('a refreshed quote timestamp cannot conceal a stalled US chart; secondary quotes use actual trade time and previous close',()=>{
  const item={id:'nasdaq',marketStatus:'OPEN',quoteAt:'2026-11-24T09:40:00-05:00',points:[]};assert.equal(indicatorChartLag(item),true);
+ assert.equal(indicatorChartLag({...item,quoteAt:'2026-11-24T09:30:30-05:00'}),true);
  assert.equal(indicatorChartLag({...item,points:[{at:'20261124093000'}]}),true);
  assert.equal(indicatorChartLag({...item,points:[{at:'20261124093900'}]}),false);
 
