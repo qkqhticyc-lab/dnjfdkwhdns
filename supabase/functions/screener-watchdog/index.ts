@@ -30,8 +30,15 @@ Deno.serve(async req=>{
   const body=await req.json().catch(()=>({})),now=new Date();
   if(!body.force&&!watchdogWindow(now))return response({status:'outside_window'});
   // Only the authenticated scheduler collects references. Public GET reads its cached observation.
-  const [references,snapshot]=await Promise.all([collectScreenReferences(),fetch('https://qkqhticyc-lab.github.io/dnjfdkwhdns/data/screener.json',{cache:'no-store',signal:AbortSignal.timeout(15000)}).then(r=>{if(!r.ok)throw Error('Snapshot unavailable');return r.json();})]);
-  if(snapshot.schemaVersion!==1||snapshot.rulesVersion!=='independent-v3'||!snapshot.items?.length)throw Error('Invalid snapshot');
+  const getSnapshot=async()=>{
+   const base='https://qkqhticyc-lab.github.io/dnjfdkwhdns/data/',options={cache:'no-store',signal:AbortSignal.timeout(15000)};
+   let r=await fetch(base+'screener-status.json',options);
+   // Compatibility only until the first status-manifest publication; normal checks fetch ~1 KB.
+   if(r.status===404)r=await fetch(base+'screener.json',options);
+   if(!r.ok)throw Error('Snapshot unavailable');return r.json();
+  };
+  const [references,snapshot]=await Promise.all([collectScreenReferences(),getSnapshot()]);
+  if(snapshot.schemaVersion!==1||snapshot.rulesVersion!=='independent-v3'||!snapshot.items?.length&&!snapshot.marketDates?.length)throw Error('Invalid snapshot');
   let decision=watchdogDecision(snapshot,references);
   if(token&&decision.dates.some(p=>p.delayed)) {
    const [scans,pages]=await Promise.all([github('workflows/screener.yml/runs?per_page=30'),github('workflows/pages.yml/runs?per_page=10')]);
@@ -48,7 +55,7 @@ Deno.serve(async req=>{
  }catch(error){
   // Do not store upstream URLs, response bodies, or credentials in public status.
   const status=/Scheduler HTTP (401|403)/.test(error.message)?'scheduler_unauthorized':'check_failed';
-  try{await db('screener_watchdog_state',{key:'latest',payload:{schemaVersion:1,checkedAt:new Date().toISOString(),status}});}catch{}
+  try{const previous=await db('screener_watchdog_state?key=eq.latest&select=payload');await db('screener_watchdog_state',{key:'latest',payload:{...previous?.[0]?.payload,schemaVersion:1,attemptedAt:new Date().toISOString(),status}});}catch{}
   return response({status},503);
  }
 });

@@ -5,10 +5,14 @@ const timestamp = run => Date.parse(run.run_started_at || run.created_at || run.
 export function watchdogWindow(now = new Date()) {
  const local = zone => Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:zone,weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
  const kr=local('Asia/Seoul'),us=local('America/New_York'),weekday=p=>!['Sat','Sun'].includes(p.weekday),minutes=p=>+p.hour*60 + +p.minute;
- return weekday(kr)&&minutes(kr)>=930&&minutes(kr)<1170 || weekday(us)&&minutes(us)>=960&&minutes(us)<1200;
+ // Start at 13:00 ET for half-day sessions; verified closed bars prevent an early normal-day scan.
+ return weekday(kr)&&minutes(kr)>=930&&minutes(kr)<1170 || weekday(us)&&minutes(us)>=780&&minutes(us)<1200;
 }
 export function watchdogDecision(snapshot,references,scans=[],pages=[],now=new Date()) {
- const dates=screenMarketDates(snapshot.items||[],references),delayed=dates.filter(p=>p.delayed);
+ const dates=screenMarketDates(snapshot.items||(snapshot.marketDates||[]).map(p=>({market:p.market,status:'ok',asOf:p.latest})),references).map(p=>{
+  const saved=!snapshot.items&&snapshot.marketDates?.find(s=>s.market===p.market);
+  return saved?{...p,total:saved.total,current:saved.current}:p;
+ }),delayed=dates.filter(p=>p.delayed);
  if(!Object.keys(references).length)return {action:null,status:'references_unavailable',dates};
  if(!delayed.length)return {action:null,status:dates.every(p=>p.reference)?'current':'references_partial',dates};
  if(scans.some(active))return {action:null,status:'scan_running',dates};
@@ -37,6 +41,7 @@ export function screenRefreshText(dates,live,saved,now=Date.now()) {
   if(fresh&&['publish_running','publish_requested'].includes(live.status))return '새 마감봉 검사를 마쳤습니다. 검색 결과를 게시하고 있습니다.';
   return '확인된 최근 마감 자료보다 검색 결과가 늦습니다. 업데이트가 완료되면 자동으로 반영됩니다.';
  }
+ if(['check_failed','scheduler_unauthorized','references_unavailable','references_partial'].includes(live?.status))return '최근 마감 자료의 갱신 여부를 확인하지 못했습니다. 마지막으로 확인한 결과를 표시합니다.';
  if(!fresh&&['requested','running','waiting'].includes(saved?.status))return '새 마감 자료 반영 여부를 확인하고 있습니다.';
  return '';
 }

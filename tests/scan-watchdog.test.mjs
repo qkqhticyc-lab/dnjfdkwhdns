@@ -22,11 +22,16 @@ test('no verified reference means unknown, never a fake current result',()=>{
 });
 test('independent windows follow DST, Asian close, weekends and Friday US close on Saturday KST',()=>{
  assert.equal(watchdogWindow(now),true);
- assert.equal(watchdogWindow(new Date('2026-11-24T20:59Z')),false);
+ assert.equal(watchdogWindow(new Date('2026-11-24T17:59Z')),false);
+ assert.equal(watchdogWindow(new Date('2026-11-27T18:10Z')),true);
  assert.equal(watchdogWindow(new Date('2026-07-24T20:05Z')),true);
  assert.equal(watchdogWindow(new Date('2026-11-27T23:00Z')),true);
  assert.equal(watchdogWindow(new Date('2026-11-28T23:00Z')),false);
  assert.equal(watchdogWindow(new Date('2026-11-25T06:30Z')),true);
+});
+test('small published manifest gives the same decision and preserves full-universe counts',()=>{
+ const manifest={...snapshot,items:undefined,marketDates:[{market:'US',latest:'2026-11-23',total:6913,current:6805}]};
+ const result=watchdogDecision(manifest,refs,[],[],now);assert.equal(result.action,'scan');assert.equal(result.dates[1].total,6913);assert.equal(result.dates[1].current,6805);assert.equal(result.dates[1].reference,'2026-11-24');
 });
 test('live references expose stale static data, never regress or falsely report an old job as running',()=>{
  const saved=[{market:'US',reference:'2026-11-23'}],live={checkedAt:now.toISOString(),dates:[{market:'US',reference:'2026-11-24'}],status:'scan_running'};
@@ -36,4 +41,5 @@ test('live references expose stale static data, never regress or falsely report 
  assert.match(screenRefreshText(dates,live,{},now.getTime()),/업데이트하고/);
  assert.match(screenRefreshText(dates,{...live,checkedAt:'2026-11-24T18:00Z'},null,now.getTime()),/늦습니다/);
  assert.doesNotMatch(screenRefreshText(dates,null,{status:'current'},now.getTime()),/최신/);
+ assert.match(screenRefreshText([],{status:'check_failed'},null,now.getTime()),/확인하지 못했습니다/);
 });

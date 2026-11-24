@@ -40,6 +40,10 @@ const indicators=JSON.parse(await readFile('data/indicators.json','utf8'));if(in
 const {validateSentimentData}=await import('../sentiment-core.mjs');const sentiment=JSON.parse(await readFile('data/sentiment.json','utf8'));if(!validateSentimentData(sentiment))throw Error('Invalid sentiment data');await copyFile('data/sentiment.json','dist/data/sentiment.json');
 const {validateETFData}=await import('../etf-core.mjs');const etfs=JSON.parse(await readFile('data/etfs.json','utf8'));if(!validateETFData(etfs))throw Error('Invalid ETF data');await copyFile('data/etfs.json','dist/data/etfs.json');
 for(const file of ['screener.json','indicator-history.json'])await copyFile('data/'+file,'dist/data/'+file);
+// A small freshness manifest lets the independent scheduler avoid downloading every stock on each check.
+const scan=JSON.parse(await readFile('data/screener.json','utf8'));
+const {screenMarketDates}=await import('../screener-freshness.mjs');
+await writeFile('dist/data/screener-status.json',JSON.stringify({schemaVersion:1,rulesVersion:scan.rulesVersion,collectedAt:scan.collectedAt,completedAt:scan.completedAt,scanRunId:scan.scanRunId,scanAttempt:scan.scanAttempt,marketDates:screenMarketDates(scan.items)}));
 const {validSignalManifest,ALERT_SHARDS}=await import('../signal-tools-publish.mjs');
 let signalManifest={schemaVersion:1,studyVersion:1,status:'unavailable',collectedAt:null,notificationShards:ALERT_SHARDS};
 try{signalManifest=JSON.parse(await readFile('.cache/signal-tools/signal-tools.json','utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
