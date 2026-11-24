@@ -41,11 +41,19 @@ end $$;
 revoke all on function public.claim_screener_watchdog(text) from public,anon,authenticated;
 grant execute on function public.claim_screener_watchdog(text) to service_role;
 
-select cron.schedule('screener-close-watchdog','*/10 * * * *',$job$
- select net.http_post(
+-- Sign in the database so pg_net never stores the permanent key in its request queue.
+create or replace function public.invoke_screener_watchdog(p_force boolean default false) returns bigint
+language plpgsql security definer set search_path='' as $$
+declare sent_at text:=floor(extract(epoch from clock_timestamp()))::bigint::text;
+ signing_key text;
+begin
+ select decrypted_secret into signing_key from vault.decrypted_secrets where name='screener_watchdog_key';
+ return net.http_post(
   url:='https://lrmevhhdfmpnclomhsmz.supabase.co/functions/v1/screener-watchdog',
-  headers:=jsonb_build_object('Content-Type','application/json','x-screener-watchdog-secret',
-    (select decrypted_secret from vault.decrypted_secrets where name='screener_watchdog_key')),
-  body:='{}'::jsonb,timeout_milliseconds:=60000
+  headers:=jsonb_build_object('Content-Type','application/json','x-screener-watchdog-at',sent_at,
+   'x-screener-watchdog-signature',encode(extensions.hmac(sent_at||'.'||case when p_force then 'force' else 'scheduled' end,signing_key,'sha256'),'hex')),
+  body:=jsonb_build_object('force',p_force),timeout_milliseconds:=60000
  );
-$job$);
+end $$;
+revoke all on function public.invoke_screener_watchdog(boolean) from public,anon,authenticated;
+select cron.schedule('screener-close-watchdog','*/10 * * * *','select public.invoke_screener_watchdog();');

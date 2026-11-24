@@ -1,7 +1,8 @@
 import {collectScreenReferences} from '../../../screener-refresh.mjs';
 import {watchdogWindow,watchdogDecision} from '../../../scan-watchdog-core.mjs';
 import {createRequestCache} from '../../../edge-cache.mjs';
-const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type, x-screener-watchdog-secret','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
+import {verifyWatchdog} from '../../../scan-watchdog-auth.mjs';
+const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type, x-screener-watchdog-signature, x-screener-watchdog-at','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
 const url=Deno.env.get('SUPABASE_URL'),key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),token=Deno.env.get('GITHUB_ACTIONS_TOKEN');
 const repo='qkqhticyc-lab/dnjfdkwhdns',cache=createRequestCache({ttl:60000});
 const response=(body,status=200)=>new Response(JSON.stringify(body),{headers,status});
@@ -22,13 +23,13 @@ Deno.serve(async req=>{
   try {const rows=await cache('state',()=>db('screener_watchdog_state?key=eq.latest&select=payload')),state=rows?.[0]?.payload||{};return response({schemaVersion:1,...state,githubConfigured:!!token});}catch{return response({schemaVersion:1,status:'unavailable',githubConfigured:!!token},503);}
  }
  if(req.method!=='POST')return response({},405);
- const supplied=req.headers.get('x-screener-watchdog-secret');
- if(!supplied||supplied.length<32)return response({},401);
+ const supplied=req.headers.get('x-screener-watchdog-signature'),at=req.headers.get('x-screener-watchdog-at');
+ if(!/^[a-f0-9]{64}$/.test(supplied||'')||!/^\d{10}$/.test(at||'')||Math.abs(Date.now()-Number(at)*1000)>120000)return response({},401);
  try {
+  const body=await req.json().catch(()=>({})),now=new Date(),force=body.force===true;
   secret ||= await db('rpc/screener_watchdog_key',{});
-  if(!secret||supplied!==secret)return response({},401);
-  const body=await req.json().catch(()=>({})),now=new Date();
-  if(!body.force&&!watchdogWindow(now))return response({status:'outside_window'});
+  if(!await verifyWatchdog(secret,supplied,at,force))return response({},401);
+  if(!force&&!watchdogWindow(now))return response({status:'outside_window'});
   // Only the authenticated scheduler collects references. Public GET reads its cached observation.
   const getSnapshot=async()=>{
    const base='https://qkqhticyc-lab.github.io/dnjfdkwhdns/data/',options={cache:'no-store',signal:AbortSignal.timeout(15000)};

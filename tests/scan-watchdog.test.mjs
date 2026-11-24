@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {watchdogWindow,watchdogDecision,screenerReferences,screenRefreshText} from '../scan-watchdog-core.mjs';
+import {signWatchdog,verifyWatchdog} from '../scan-watchdog-auth.mjs';
 const now=new Date('2026-11-24T23:00:00Z'),snapshot={schemaVersion:1,collectedAt:'2026-11-24T14:10:00Z',completedAt:'2026-11-24T14:21:00Z',items:[{market:'US',status:'ok',asOf:'2026-11-23'}]},refs={US:{status:'ok',asOf:'2026-11-24'}};
+test('scheduler signatures expire, bind manual mode and reject missing or altered authentication',async()=>{
+ const secret='test-only-private-key',at=String(now.getTime()/1000),signature=await signWatchdog(secret,at);
+ assert.equal(await verifyWatchdog(secret,signature,at,false,now.getTime()),true);
+ assert.equal(await verifyWatchdog(secret,signature,at,true,now.getTime()),false);
+ assert.equal(await verifyWatchdog(secret,signature,at,false,now.getTime()+121000),false);
+ assert.equal(await verifyWatchdog('wrong-key',signature,at,false,now.getTime()),false);
+ assert.equal(await verifyWatchdog(secret,'',at,false,now.getTime()),false);
+});
 test('independent check requests a scan when the post-close scheduled runs never started',()=>{
  const d=watchdogDecision(snapshot,refs,[],[],now);assert.equal(d.action,'scan');assert.equal(d.dates[1].delayed,true);
  assert.equal(watchdogDecision(snapshot,refs,[{status:'queued'}],[],now).status,'scan_running');
