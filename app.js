@@ -1,5 +1,6 @@
 import {initSignalStudy} from './signal-study.js';
 import {initLounge} from './lounge.js';
+import {initSectorMap} from './sector-map.js';
 import {initNotifications} from './notifications.js';
 import{initScreener}from'./screener.js';
 import {initClub} from './club.js';
@@ -32,6 +33,7 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  const compare=page==='chart-compare'?initChartCompare(config):null;
  const news=page==='news'?initNews():null;
  const lounge=page==='lounge'?initLounge(config):null;
+ const sectorMap=page==='sector-map'?initSectorMap(config):null;
  await initAuth(config,community?.onSession);
  if(market)await market;
  if(club)await club;
@@ -41,6 +43,7 @@ fetch('./site.config.json').then(r=>{if(!r.ok)throw Error();return r.json();}).t
  if(compare)await compare;
  if(news)await news;
  if(lounge)await lounge;
+ if(sectorMap)await sectorMap;
  if(page==='screener'){initSignalStudy();await initScreener();}
  if(page==='etfs')await initETFs();
 }).catch(()=>{const box=document.createElement('p');box.className='member-status is-error';box.textContent='서비스 연결을 확인하지 못했습니다. 잠시 후 새로고침해 주세요.';document.querySelector('main').prepend(box);});

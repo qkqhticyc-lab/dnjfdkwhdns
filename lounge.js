@@ -21,6 +21,7 @@ function storage(key){try{return localStorage.getItem(key);}catch{return null;}}
 export async function initLounge(config){
   const params=new URLSearchParams(location.search),saved=params.get('market')||storage('lounge-market-v1');
   let market=saved==='US'?'US':'KR',view='new',data={},live,storedBusy=false,liveBusy=false;
+  const sectorFeeds=new Map(),sectorPending=new Set();
   const limits={signals:4,calendar:4,news:4,alerts:2};
   const sources=['indicators','indicator-history','screener','sectors','news'],failures=new Set();
   const ids=()=>market==='KR'?['kospi','kosdaq']:['sp500','nasdaq'];
@@ -53,8 +54,22 @@ export async function initLounge(config){
     host.append(element('p',(market==='KR'?'코스피':'S&P 500')+' '+direction+(item.marketStatus==='OPEN'?' 흐름':item.marketStatus==='CLOSE'?' 마감 기준':' · 최근 제공 기준'),'lounge-hero-title'));
     const quoteHost=$('lounge-quotes');quoteHost.replaceChildren();
     for(const id of [primary,secondary]){const quote=current(id),box=element('div',null,'lounge-quote');box.append(element('small',INDICATORS.find(def=>def.id===id)?.name),element('strong',number(quote?.price)),element('span',percent(quote?.changePercent),tone(quote?.changePercent)),element('p',quote?.quoteAt?'시세 '+meta(quote.quoteAt,quote.status==='stale')+(quote.delayLabel?' · '+quote.delayLabel:'')+(quote.provider?' · '+quote.provider:''):quote?.chartDelayed?'원본 분봉 갱신 지연 · 최신 시세 확인 중':'일봉 '+(quote?.asOf||'미제공'),'lounge-meta'));quoteHost.append(box);}
-    const snapshot=stocks(),groups=loungeSectors(snapshot.rows,classifications()),sectors=$('lounge-sector');sectors.replaceChildren();sectors.className='lounge-sector';
-    if(groups.length){sectors.append(element('b','업종 표본 · '+snapshot.asOf));for(const group of [...groups.slice(0,2),...groups.slice(-2)].filter((group,index,list)=>list.findIndex(other=>other.id===group.id)===index)){const chip=element('span',SECTORS[group.id]+' '+percent(group.average),tone(group.average));chip.title='유동성 기준 통과 '+group.count+'종목의 당일 등락률 단순 평균';sectors.append(chip);}}
+    renderSectorStrip();
+  }
+  function renderSectorStrip(){
+    const host=$('lounge-sector'),feed=sectorFeeds.get(market);host.replaceChildren();host.className='lounge-sector';
+    const link=element('a',feed?(feed.marketStatus==='OPEN'?'장중 업종':feed.marketStatus==='CLOSE'?'마감 업종':'업종 흐름')+' · '+(feed.sessionDate||'기준일 확인 중'):'업종 흐름 불러오는 중','lounge-sector-link');link.href='./sector-map.html?market='+market;link.title='업종지도와 현재 종목 시세 보기';host.append(link);
+    if(!feed){link.textContent=failures.has('live-sectors')?'업종지도 · 자료 연결 확인 중':'업종지도 · 현재 업종 불러오는 중';return;}
+    const groups=feed.sectors.filter(p=>p.status==='ok'&&Number.isFinite(p.changePercent)).sort((a,b)=>b.changePercent-a.changePercent),stampAt=groups.map(p=>p.quoteAt).filter(Boolean).sort()[0]||feed.collectedAt;
+    link.title=(market==='US'?'S&P 500 업종 ETF':'국내 업종 묶음')+' · '+meta(stampAt,failures.has('live-sectors'))+' · 5분 간격 집계';
+    for(const row of [...groups.slice(0,2),...groups.slice(-2)].filter((p,i,a)=>a.findIndex(q=>q.id===p.id)===i)){const chip=element('a',row.name+' '+percent(row.changePercent),'lounge-sector-chip '+tone(row.changePercent));chip.href='./sector-map.html?'+new URLSearchParams({market,sector:row.id});chip.title=row.name+' 현재 흐름과 관련 종목';host.append(chip);}
+    host.append(element('small',failures.has('live-sectors')?'갱신 지연 · '+stamp(stampAt):stamp(stampAt)+' KST · 업종지도 보기'));
+  }
+  async function loadSectors(force=false){
+    const m=market,old=sectorFeeds.get(m);if(sectorPending.has(m)||!force&&old&&Date.now()-Date.parse(old.collectedAt)<300000)return;
+    sectorPending.add(m);
+    try{const d=await json(config.supabase.url+'/functions/v1/market-sectors?market='+m,{apikey:config.supabase.publishableKey,Authorization:'Bearer '+config.supabase.edgeAnonKey});if(d.market!==m||!Array.isArray(d.sectors))throw Error();sectorFeeds.set(m,d);failures.delete('live-sectors');}
+    catch{failures.add('live-sectors');}finally{sectorPending.delete(m);if(m===market)renderSectorStrip();}
   }
 
   function renderState(){
@@ -127,16 +142,17 @@ export async function initLounge(config){
     try{const value=await json(config.supabase.url+'/functions/v1/market-indicators',{apikey:config.supabase.publishableKey,Authorization:'Bearer '+config.supabase.edgeAnonKey});if(value.items?.length!==12)throw Error('Invalid indicator count');live=retainLiveItems(value,live);failures.delete('live');}catch{failures.add('live');if(live)live={...live,items:live.items.map(item=>({...item,status:item.status==='ok'?'stale':item.status}))};}
     liveBusy=false;$('lounge-refresh').disabled=storedBusy;draw();
   }
-  for(const button of document.querySelectorAll('[data-lounge-market]'))button.onclick=()=>{market=button.dataset.loungeMarket;limits.signals=4;try{localStorage.setItem('lounge-market-v1',market);}catch{}draw();};
+  for(const button of document.querySelectorAll('[data-lounge-market]'))button.onclick=()=>{market=button.dataset.loungeMarket;limits.signals=4;try{localStorage.setItem('lounge-market-v1',market);}catch{}draw();loadSectors();};
   for(const button of document.querySelectorAll('[data-lounge-state]'))button.onclick=()=>{view=button.dataset.loungeState;limits.signals=4;renderSignals();};
   $('lounge-type').onchange=()=>{limits.signals=4;renderSignals();renderState();};
   for(const[key,render]of Object.entries({signals:renderSignals,calendar:renderCalendar,news:renderNews,alerts:renderAlerts}))$('lounge-'+key+'-more').onclick=()=>{limits[key]+=4;render();};
   $('lounge-open-alerts').onclick=event=>{event.stopPropagation();document.getElementById('notification-button')?.click();};
-  $('lounge-refresh').onclick=()=>Promise.all([loadStored(),loadLive()]);
+  $('lounge-refresh').onclick=()=>Promise.all([loadStored(),loadLive(),loadSectors(true)]);
   window.addEventListener('storage',event=>{if(event.key===NOTIFICATION_KEY)renderAlerts();});
   window.addEventListener('investment-notifications-change',renderAlerts);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadLive();});
-  window.addEventListener('focus',()=>{if(!document.hidden)loadLive();});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){loadLive();loadSectors();}});
+  window.addEventListener('focus',()=>{if(!document.hidden){loadLive();loadSectors();}});
   draw();setInterval(()=>{if(!document.hidden)loadLive();},30000);setInterval(()=>{if(!document.hidden)loadStored();},300000);
-  await Promise.all([loadStored(),loadLive()]);
+  setInterval(()=>{if(!document.hidden)loadSectors();},60000);
+  await Promise.all([loadStored(),loadLive(),loadSectors()]);
 }
