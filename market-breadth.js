@@ -57,5 +57,8 @@ export function initMarketBreadth(){
   try{const r=await fetch('./data/market-breadth.json',{cache:'no-store'});if(!r.ok)throw Error();const next=await r.json();if(!validateBreadth(next))throw Error();data=next;draw();const last=data.nyseRaw.at(-1);notice.textContent=`S&P 500 구성 ${data.coverage.total}종목 중 ${data.coverage.loaded}종목 가격 확보 · 자체 산출 · NYSE 자료 ${last?.date||'미확보'}${data.refreshError?' · 갱신 지연으로 이전 자료 표시':''}`;root.querySelector('[data-breadth-nyse-note]').textContent=`NYSE ZBT는 ${data.zbt.find(p=>p.value!=null)?.date||'자료 확보 후'}부터 표시합니다. 앞선 기간은 비워 둡니다. 초기 30개 관측까지는 EMA 초기값의 영향이 있습니다.`;
   }catch{notice.textContent=data?'새 자료를 받지 못해 기존 차트를 유지합니다.':'자료를 불러오지 못했습니다. 잠시 후 다시 불러오기를 눌러주세요.';}finally{busy=false;root.querySelector('[data-breadth-refresh]').disabled=false;}
  }
- root.querySelector('[data-breadth-refresh]').addEventListener('click',load);return load();
+ root.querySelector('[data-breadth-refresh]').addEventListener('click',load);
+ setInterval(()=>{if(!document.hidden)load();},60000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
+ return load();
 }

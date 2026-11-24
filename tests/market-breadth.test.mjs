@@ -1,6 +1,14 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {aggregateBreadth,nyseCounts,zweig,normalizedPrices,priceRows,validateBreadth} from '../market-breadth-core.mjs';
+import {aggregateBreadth,nyseCounts,zweig,normalizedPrices,priceRows,validateBreadth,breadthCutoff} from '../market-breadth-core.mjs';
 const calendar=n=>Array.from({length:n},(_,i)=>{const d=new Date('2025-01-01T00:00:00Z');d.setUTCDate(d.getUTCDate()+i);return d.toISOString().slice(0,10);});
+test('breadth accepts the completed US session immediately after close with DST and early-close metadata',()=>{
+ assert.equal(breadthCutoff(new Date('2026-11-23T20:59:00Z')),'2026-11-22');
+ assert.equal(breadthCutoff(new Date('2026-11-23T21:00:00Z')),'2026-11-23');
+ assert.equal(breadthCutoff(new Date('2026-07-20T20:00:00Z')),'2026-07-20');
+ const meta={currentTradingPeriod:{regular:{end:Date.parse('2026-11-27T18:00:00Z')/1000}}};
+ assert.equal(breadthCutoff(new Date('2026-11-27T17:59:00Z'),meta),'2026-11-26');
+ assert.equal(breadthCutoff(new Date('2026-11-27T18:00:00Z'),meta),'2026-11-27');
+});
 test('breadth computes separate moving averages with observed denominators and coverage gates',()=>{
  const dates=calendar(240),up=dates.map((date,i)=>({date,adjusted:100+i})),down=dates.map((date,i)=>({date,adjusted:400-i}));
  const r=aggregateBreadth([up,down],dates,2);assert.equal(r[18].ma20.value,null);assert.equal(r[19].ma20.value,50);assert.equal(r[199].ma200.value,50);

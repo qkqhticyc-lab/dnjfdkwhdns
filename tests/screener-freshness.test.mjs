@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {screenMarketDates,screenMarketDateText} from '../screener-freshness.mjs';
-import {screenRow} from '../screener-core.mjs';
+import {screenRow,collectScreener} from '../screener-core.mjs';
 import {readFile} from 'node:fs/promises';
 import {screenRefreshDecision} from '../screener-refresh.mjs';
 
@@ -52,6 +52,14 @@ test('US close respects standard time and daylight saving time', () => {
 });
 test('scheduled scans cover Asian close plus US summer and winter close retries', async () => {
   const workflow=await readFile('.github/workflows/screener.yml','utf8');
-  assert.match(workflow,/cron: '45 6,7 \* \* 1-5'/);
-  assert.match(workflow,/cron: '15 20,21,22 \* \* 1-5'/);
+  assert.match(workflow,/cron: '35,55 6 \* \* 1-5'/);
+  assert.match(workflow,/cron: '5,35 20,21 \* \* 1-5'/);
+});
+
+test('a scan crossing the close evaluates the fetched candle at response time, not universe start',async()=>{
+ const item={market:'KR',symbol:'005930',providerSymbol:'005930'},history=bars('2026-11-24').map(p=>({localDate:p.date.replaceAll('-',''),openPrice:p.open,highPrice:p.high,lowPrice:p.low,closePrice:p.close,accumulatedTradingVolume:p.volume}));
+ const universe={collectedAt:'2026-11-24T06:20:00Z',items:[item],coverage:[]},fetcher=async()=>Response.json(history);
+ const r=await collectScreener(fetcher,new Date(universe.collectedAt),null,{universe,clock:()=>new Date('2026-11-24T06:31:00Z')});
+ assert.equal(r.items[0].asOf,'2026-11-24');assert.equal(r.items[0].collectedAt,'2026-11-24T06:31:00.000Z');
+ const before=await collectScreener(fetcher,new Date(universe.collectedAt),null,{universe,clock:()=>new Date('2026-11-24T06:29:00Z')});assert.equal(before.items[0].asOf,'2026-11-23');
 });

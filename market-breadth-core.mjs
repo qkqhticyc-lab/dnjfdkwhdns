@@ -1,6 +1,17 @@
 const finite=Number.isFinite;
 const nyDate=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'});
 export const BREADTH_PERIODS=[20,50,200];
+export function breadthCutoff(now=new Date(),meta={}){
+ const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
+ const date=`${parts.year}-${parts.month}-${parts.day}`,minutes=Number(parts.hour)*60+Number(parts.minute),end=meta.currentTradingPeriod?.regular?.end;
+ let close=16*60;
+ if(Number.isFinite(end)&&nyDate.format(new Date(end*1000))===date){
+  const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(end*1000)).map(p=>[p.type,p.value]));
+  const m=Number(p.hour)*60+Number(p.minute);if(m>=13*60&&m<=16*60)close=m;
+ }
+ const day=new Date(date+'T00:00:00Z');if(minutes<close)day.setUTCDate(day.getUTCDate()-1);
+ return day.toISOString().slice(0,10);
+}
 export const validDay=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&finite(Date.parse(d))&&new Date(d).toISOString().slice(0,10)===d;
 export function constituentSymbols(html){
  const table=html.split('id="constituents"')[1]?.split('</table>')[0];if(!table)throw Error('Constituent table missing');

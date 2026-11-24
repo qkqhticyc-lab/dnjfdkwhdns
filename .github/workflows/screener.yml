@@ -23,8 +23,10 @@ on:
       - 'scripts/screener-*.mjs'
       - '.github/workflows/screener.yml'
   schedule:
-    - cron: '45 6,7 * * 1-5'
-    - cron: '15 20,21,22 * * 1-5'
+    - cron: '35,55 6 * * 1-5'
+    - cron: '35 7,8 * * 1-5'
+    - cron: '5,35 20,21 * * 1-5'
+    - cron: '5 22 * * 1-5'
 permissions:
   contents: read
 concurrency:
@@ -52,7 +54,7 @@ jobs:
     timeout-minutes: 40
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 6
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     steps:
