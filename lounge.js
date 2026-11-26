@@ -26,7 +26,7 @@ export async function initLounge(config){
   let market=saved==='US'?'US':'KR',view='new',data={},live,storedBusy=false,liveBusy=false;
   const sectorFeeds=new Map(),sectorPending=new Set();
   const limits={signals:4,calendar:4,news:4,alerts:2,strength:3};
-  const sources=['indicators','indicator-history','screener','sectors','news'],failures=new Set();
+  const sources=['indicators','indicator-history','screener','sectors','sector-benchmarks','news'],failures=new Set();
   const ids=()=>market==='KR'?['kospi','kosdaq']:['sp500','nasdaq'];
   const daily=id=>data.indicators?.items?.find(item=>item.id===id);
   const current=id=>live?.items?.find(item=>item.id===id&&['ok','stale'].includes(item.status))||daily(id);
@@ -76,7 +76,7 @@ export async function initLounge(config){
   }
 
   function renderStrength(){
-    const host=$('lounge-strength-list'),snapshot=loungeStocks(data.screener?.items||[],market),benchmark=sectorBenchmark(daily(ids()[0]),market,snapshot.asOf),result=sectorStrength(snapshot.rows,classifications(),benchmark),feed=sectorFeeds.get(market);
+    const host=$('lounge-strength-list'),snapshot=loungeStocks(data.screener?.items||[],market),index=data['sector-benchmarks']?.items?.find(p=>p.market===market&&['ok','stale'].includes(p.status)),benchmark=sectorBenchmark(index,market,snapshot.asOf)||sectorBenchmark(daily(ids()[0]),market,snapshot.asOf),result=sectorStrength(snapshot.rows,classifications(),benchmark),feed=sectorFeeds.get(market);
     host.replaceChildren();$('lounge-strength-map').href='./sector-map.html?market='+market;
     $('lounge-strength-basis').textContent=(result.asOf||'기준일 확인 중')+' 마감 기준 · '+(market==='KR'?'코스피':'S&P 500')+' 대비 · 유동성 표본 '+result.measured+'/'+result.available+'종목'+(failures.has('screener')||failures.has('indicators')||failures.has('sectors')?' · 갱신 지연':'');
     const relative=value=>Number.isFinite(value)?(value>0?'+':'')+value.toFixed(1)+'%p':'—';

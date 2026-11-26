@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {sectorStrengthInputs,sectorBenchmark,sectorStrength} from '../sector-strength-core.mjs';
 import {loungeStocks} from '../lounge-core.mjs';
 import {screenRow} from '../screener-core.mjs';
+import {normalizeSectorBenchmark,validSectorBenchmarks} from '../sector-benchmark-core.mjs';
 
 const asOf='2026-11-25',from={5:'2026-11-18',20:'2026-10-28',60:'2026-08-31'};
 const inputs=(values=[3,8,15],above20=true)=>({version:1,asOf,above20,windows:Object.fromEntries([5,20,60].map((h,i)=>[h,{from:from[h],return:values[i]}]))});
@@ -53,4 +54,14 @@ test('scanner exports strength metrics from closed rows only',()=>{
  const bars=Array.from({length:80},(_,i)=>({date:new Date(Date.UTC(2026,8,1+i)).toISOString().slice(0,10),open:100+i,high:102+i,low:99+i,close:101+i,volume:1e6}));
  const now=new Date(bars.at(-1).date+'T01:00:00Z'),result=screenRow({market:'KR',symbol:'005930'},bars,now);
  assert.equal(result.sectorStrength.asOf,bars.at(-2).date);assert.equal(result.sectorStrength.windows[20].from,bars.at(-22).date);
+});
+test('dedicated benchmark history excludes unfinished closes and validates full two-market snapshots',()=>{
+ const raw=Array.from({length:75},(_,i)=>({localDate:new Date(Date.UTC(2026,8,1+i)).toISOString().slice(0,10).replaceAll('-',''),closePrice:100+i}));
+ const date=raw.at(-1).localDate.replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3'),now=new Date(date+'T01:00:00Z');
+ const kr=normalizeSectorBenchmark(raw,'KR',now),us=normalizeSectorBenchmark(raw,'US',now);
+ assert.notEqual(kr.asOf,date);assert.equal(kr.points.length,74);
+ assert.equal(validSectorBenchmarks({schemaVersion:1,items:[kr,us]}),true);
+ assert.equal(validSectorBenchmarks({schemaVersion:1,items:[kr,kr]}),false);
+ assert.throws(()=>normalizeSectorBenchmark([...raw,raw[0]],'KR',now),/Duplicate/);
+ assert.throws(()=>normalizeSectorBenchmark(raw.slice(0,20),'KR',now),/Insufficient/);
 });

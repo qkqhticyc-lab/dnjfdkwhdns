@@ -38,6 +38,11 @@ if(!validatePositionMonitor(positions))throw Error('Invalid position monitor dat
 await writeFile('dist/data/position-monitor.json',JSON.stringify(positions));
 const indicators=JSON.parse(await readFile('data/indicators.json','utf8'));if(indicators.schemaVersion!==1||indicators.items?.length!==12)throw Error('Invalid indicator data');await copyFile('data/indicators.json','dist/data/indicators.json');
 const {validateSentimentData}=await import('../sentiment-core.mjs');const sentiment=JSON.parse(await readFile('data/sentiment.json','utf8'));if(!validateSentimentData(sentiment))throw Error('Invalid sentiment data');await copyFile('data/sentiment.json','dist/data/sentiment.json');
+const {validSectorBenchmarks}=await import('../sector-benchmark-core.mjs');
+let sectorBenchmarks={schemaVersion:1,collectedAt:null,items:['KR','US'].map(market=>({market,status:'unavailable',points:[]}))};
+try{sectorBenchmarks=JSON.parse(await readFile('.cache/sector-benchmarks/publish.json','utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+if(!validSectorBenchmarks(sectorBenchmarks))throw Error('Invalid sector benchmarks');
+await writeFile('dist/data/sector-benchmarks.json',JSON.stringify(sectorBenchmarks));
 const {validateETFData}=await import('../etf-core.mjs');const etfs=JSON.parse(await readFile('data/etfs.json','utf8'));if(!validateETFData(etfs))throw Error('Invalid ETF data');await copyFile('data/etfs.json','dist/data/etfs.json');
 for(const file of ['screener.json','indicator-history.json'])await copyFile('data/'+file,'dist/data/'+file);
 // A small freshness manifest lets the independent scheduler avoid downloading every stock on each check.
