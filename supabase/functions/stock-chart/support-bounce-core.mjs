@@ -14,7 +14,7 @@ export function analyzeSupportBounce(rows,metrics){
   if(watch&&(i-watch.index>15||p.close<watch.floor)){state=i-watch.index>15?'expired':'invalidated';snapshot=watch;watch=null;cooldown=i+5;}
   if(!watch&&i>cooldown&&f(drop)&&drop>=8&&peak-p.close>=3*g.atr){
    const pivot=pivots.filter(v=>i-v.index>=3&&i-v.index<=60&&p.low>=v.low-.6*g.atr&&p.low<=v.low+1.2*g.atr).at(-1);
-   if(pivot){watch={index:i,asOf:p.asOf,anchorAt:pivot.asOf,anchorIndex:pivot.index,anchor:pivot.low,anchorVolume:pivot.volume,floor:pivot.low-.6*g.atr,low:Math.min(pivot.low,p.low),lowIndex:p.low<pivot.low?i:pivot.index,dropPct:drop};state='watch';}
+   if(pivot){watch={index:i,asOf:p.asOf,anchorAt:pivot.asOf,anchorIndex:pivot.index,anchor:pivot.low,anchorVolume:pivot.volume,floor:pivot.low-.6*g.atr,low:Math.min(pivot.low,p.low),lowIndex:p.low<pivot.low?i:pivot.index,dropPct:drop,initialDropPct:drop};state='watch';}
   }
   if(watch){
    if(p.low<watch.low){watch.low=p.low;watch.lowIndex=i;}
@@ -41,7 +41,11 @@ export function analyzeSupportBounce(rows,metrics){
  return{version:SUPPORT_BOUNCE_VERSION,frames};
 }
 
+const candidateEvidence=checks=>['support','dry','hold','risk'].every(key=>checks?.find(c=>c.key===key)?.met===true);
+// Candidates may precede the recovery candle/volume trigger, but not a defended
+// low or a usable risk/reward boundary. Apply this to cached scans as well.
+export const isSupportBounceCandidate=c=>c?.state==='watch'&&c.method==='support'&&candidateEvidence(c.checks);
 export function supportBounceCandidate(frames){
- const last=frames.at(-1),b=last?.supportBounce;if(!b||b.state!=='watch'||!b.checks?.find(c=>c.key==='support')?.met||!b.checks?.find(c=>c.key==='dry')?.met||last.close<b.floor||last.close>b.upper)return null;
- return{state:'watch',method:'support',pattern:b.pattern,provisional:!!last.provisional,asOf:b.asOf,age:frames.length-1-b.index,expiresIn:Math.max(0,15-(frames.length-1-b.index)),referenceAt:last.asOf,referencePrice:last.close,lower:b.low,upper:b.upper,stop:b.low-.2*last.atr,resistance:b.resistance,roomR:b.roomR,lowAt:frames[b.lowIndex]?.asOf||b.anchorAt,newLow:b.lowIndex===frames.length-1,aboveLowPct:(last.close/b.low-1)*100,initialDropPct:b.dropPct,currentDropPct:b.dropPct,minRsi:null,rsi:last.rsi,checks:b.checks,blocked:b.blocked};
+ const last=frames.at(-1),b=last?.supportBounce;if(!b||b.state!=='watch'||!candidateEvidence(b.checks)||last.close<b.floor||last.close>b.upper)return null;
+ return{state:'watch',method:'support',pattern:b.pattern,provisional:!!last.provisional,asOf:b.asOf,age:frames.length-1-b.index,expiresIn:Math.max(0,15-(frames.length-1-b.index)),referenceAt:last.asOf,referencePrice:last.close,lower:b.low,upper:b.upper,stop:b.low-.2*last.atr,resistance:b.resistance,roomR:b.roomR,lowAt:frames[b.lowIndex]?.asOf||b.anchorAt,newLow:b.lowIndex===frames.length-1,aboveLowPct:(last.close/b.low-1)*100,initialDropPct:b.initialDropPct??b.dropPct,currentDropPct:b.dropPct,minRsi:null,rsi:last.rsi,checks:b.checks,blocked:b.blocked};
 }

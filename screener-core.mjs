@@ -1,4 +1,5 @@
 import{reboundCandidate}from'./rebound-candidate-core.mjs';
+import{isSupportBounceCandidate}from'./support-bounce-core.mjs';
 import{screenEntryType}from'./entry-types.mjs';
 import{analyzeStrategy}from'./strategy-core.mjs';
 import{liveDailyRows}from'./live-chart-core.mjs';
@@ -20,7 +21,7 @@ export function screenRow(item,bars,now=new Date(),options={}){
  return{...item,...tools,locationInputs:locationInputs(guide,signal),rankInputs:rankInputs(last),liquidity:liquidityStats(rows),status:'ok',asOf:last.asOf,collectedAt:now.toISOString(),price:last.close,changePercent:(last.close/rows.at(-2).close-1)*100,rsi:last.rsi,volumeRatio:last.volumeRatio,trend:last.trend,signal:signal?{...signal,age:guide.frames.length-1-index}:null,candidate:reboundCandidate(guide.frames),state:signal?.status==='active'?'active':last.ema8>last.ema14&&last.ema14>last.ema21&&last.close>last.ema14?'setup':signal?.status==='closed'?'closed':'none'};
 }
 export function filterScreen(items,{market='ALL',query='',age=3,state='active',trend='ALL',volume=0,liquidity='all',excludeSpecial=false,excluded=[],entryType='all'}={}){
- return items.filter(p=>{const candidateMode=entryType==='reboundCandidate',ref=candidateMode?p.candidate:p.signal;return p.status==='ok'&&(candidateMode?ref?.state==='watch':entryType==='all'||entryType==='confirmed'&&['breakout','pullback','triangle','boxRetest'].includes(screenEntryType(p.signal))||screenEntryType(p.signal)===entryType)&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||ref&&ref.age<(Number(age)===0?1:Number(age)))&&(candidateMode||state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume);});
+ return items.filter(p=>{const candidateMode=entryType==='reboundCandidate',ref=candidateMode?p.candidate:p.signal;return p.status==='ok'&&(candidateMode?isSupportBounceCandidate(ref):entryType==='all'||entryType==='confirmed'&&['breakout','pullback','triangle','boxRetest'].includes(screenEntryType(p.signal))||screenEntryType(p.signal)===entryType)&&passesLiquidity(p,liquidity)&&(!excludeSpecial||!excludedStock(p))&&!excluded.includes(screenKey(p))&&(market==='ALL'||p.market===market)&&(!query||[p.name,p.symbol].some(v=>v.toLowerCase().includes(query.toLowerCase())))&&(age==='all'||ref&&ref.age<(Number(age)===0?1:Number(age)))&&(candidateMode||state==='all'||p.state===state)&&(trend==='ALL'||p.trend===trend)&&(!volume||Number.isFinite(p.volumeRatio)&&p.volumeRatio>=volume);});
 }
 export const screenKey=p=>p.market+':'+p.symbol;
 export function shardFor(p,count){let h=0;for(const c of screenKey(p))h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h%count;}
