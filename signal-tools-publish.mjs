@@ -6,6 +6,7 @@ export const ALERT_SHARDS = 32;
 
 export function buildSignalTools(scan, sectors) {
   if (scan?.signalToolsVersion !== 1 || !Array.isArray(scan.items) || !Number.isFinite(Date.parse(scan.collectedAt))) throw Error('Signal study scan is unavailable');
+  if (scan.studyVersion !== STUDY_VERSION) throw Error('Signal study rules changed; a complete recalculation is required');
   const classified = new Map((sectors?.items || []).map(item => [item.key, item.id]));
   const groups = new Map();
   const shards = Array.from({ length: ALERT_SHARDS }, () => ({ schemaVersion: 1, collectedAt: scan.collectedAt, stocks: {} }));
@@ -44,7 +45,7 @@ export function buildSignalTools(scan, sectors) {
 }
 
 export function validSignalManifest(data) {
-  return data?.schemaVersion === 1 && [1,2].includes(data.studyVersion) && ['ok', 'unavailable'].includes(data.status)
+  return data?.schemaVersion === 1 && [1,2,3].includes(data.studyVersion) && ['ok', 'unavailable'].includes(data.status)
     && (data.status === 'unavailable' || Number.isFinite(Date.parse(data.collectedAt)))
     && data.notificationShards === ALERT_SHARDS;
 }

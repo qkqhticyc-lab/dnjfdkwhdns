@@ -1,6 +1,6 @@
 import { SECTORS } from './sector-core.mjs';
 import { ENTRY_LABELS } from './entry-types.mjs';
-import { studySummary } from './signal-study-core.mjs';
+import { studySummary, STUDY_VERSION } from './signal-study-core.mjs';
 import { validSignalManifest } from './signal-tools-publish.mjs';
 
 const MARKET_LABELS = { KR: '한국', US: '미국', JP: '일본' };
@@ -68,7 +68,7 @@ export function initSignalStudy() {
     }
     byId('study-path').textContent = summary.results.some(result=>result.pathCount<result.count)
       ? '관찰 기간별 목표·손절 도달 이력을 다시 집계하고 있습니다. 재집계가 끝난 표본만 비율에 반영합니다.'
-      : '각 비율은 해당 관찰 기간이 완료된 표본 기준입니다. TP2 달성은 TP1에도 포함되며, TP1 달성 후 손절은 두 항목에 각각 집계합니다. 동일 봉에서 목표·손절이 함께 닿으면 손절을 우선 집계합니다.';
+      : '각 비율의 분모는 전체 완료 표본입니다. TP1을 먼저 달성한 뒤 손절선에 닿은 신호는 손절 건수에서 제외합니다. 20봉 기준 제외 '+summary.results[2].stopAfterTp1Count.toLocaleString()+'건. TP2는 TP1에도 포함됩니다. TP1 선행을 확인할 수 없는 동일 봉 접촉은 손절 우선입니다.';
     drawTable('study-types', ENTRY_LABELS, groups, 'type');
     drawTable('study-markets', MARKET_LABELS, groups, 'market');
   }
@@ -82,6 +82,7 @@ export function initSignalStudy() {
       if (!response.ok) throw Error('Study data unavailable');
       const next = await response.json();
       if (!validSignalManifest(next) || !Array.isArray(next.groups) || next.status !== 'ok') throw Error('Study scan in progress');
+      if(next.studyVersion!==STUDY_VERSION){byId('study-status').textContent=data?'새 자료가 이전 집계 기준이어서 현재 통계를 유지합니다.':'TP1 이후 손절을 제외한 새 통계를 전체 종목에서 다시 계산하고 있습니다.';if(!data)byId('study-results').hidden=true;return;}
       if (data && next.collectedAt < data.collectedAt) throw Error('Older study ignored');
       data = next;
       byId('study-from').min = data.fromMonth; byId('study-from').max = data.toMonth;

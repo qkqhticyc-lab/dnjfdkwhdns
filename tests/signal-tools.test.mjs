@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rankScreenItem, rankInputs, passesRankFilters } from '../screener-rank.mjs';
-import { evaluateStudyPath, buildSignalStudy, studySummary, emptyStudyGroup, STUDY_COSTS, netStudyReturn } from '../signal-study-core.mjs';
+import { evaluateStudyPath, buildSignalStudy, studySummary, emptyStudyGroup, STUDY_VERSION, STUDY_COSTS, netStudyReturn } from '../signal-study-core.mjs';
 import { signalEventHistory } from '../signal-events.mjs';
 import { benchmarkRegimes } from '../scripts/study-market.mjs';
-import { buildSignalTools } from '../signal-tools-publish.mjs';
+import { buildSignalTools, validSignalManifest } from '../signal-tools-publish.mjs';
 import { emptyNotificationState, syncNotificationWatchlist, addSignalNotifications, addCalendarNotifications,
   mergeNotificationStates, parseNotificationState } from '../notifications-core.mjs';
 
@@ -73,7 +73,7 @@ function achievementFixture() {
   return {rows,guide};
 }
 
-test('achievement ratios use each completed horizon and include TP1 before a later TP2 or stop',()=>{
+test('achievement ratios retain completed samples but exclude stops after TP1 in each horizon',()=>{
   const {rows,guide}=achievementFixture();
   rows[3]= {...rows[3],high:112,close:109};
   rows[7]= {...rows[7],high:122,close:119};
@@ -81,8 +81,37 @@ test('achievement ratios use each completed horizon and include TP1 before a lat
   assert.deepEqual(summary.results.map(row=>[row.pathCount,row.tp1Rate,row.tp2Rate,row.stopRate]),[[1,100,0,0],[1,100,100,0],[1,100,100,0]]);
   rows[7]={...rows[7],high:109,low:94,close:97};
   summary=studySummary(buildSignalStudy(rows,guide));
-  assert.deepEqual(summary.results.map(row=>[row.tp1Count,row.tp2Count,row.stopCount]),[[1,0,0],[1,0,1],[1,0,1]]);
-  assert.equal(summary.results[2].tp1Rate,100);assert.equal(summary.results[2].stopRate,100);
+  assert.deepEqual(summary.results.map(row=>[row.pathCount,row.tp1Count,row.tp2Count,row.stopCount,row.stopAfterTp1Count]),[[1,1,0,0,0],[1,1,0,0,1],[1,1,0,0,1]]);
+  assert.equal(summary.results[2].tp1Rate,100);assert.equal(summary.results[2].stopRate,0);
+});
+
+test('TP1 before a regular or gap stop changes only the reported stop class, not exit returns',()=>{
+  const rows=Array.from({length:20},()=>bar());
+  rows[1]=bar({high:112,close:109});rows[2]=bar({low:94});
+  let result=evaluateStudyPath(rows,levels,20);
+  assert.equal(result.stopped,true);assert.equal(result.tp1,true);
+  assert.equal(result.stopBeforeTp1,false);assert.equal(result.stopAfterTp1,true);
+  assert.equal(result.ratio,.95);assert.equal(result.ambiguous,false);
+  rows[2]=bar({open:90,low:89});result=evaluateStudyPath(rows,levels,20);
+  assert.equal(result.ratio,.9);assert.equal(result.stopBeforeTp1,false);assert.equal(result.stopAfterTp1,true);
+});
+
+test('an opening TP1 is known before an intrabar stop; an unknown high/low order is not a win',()=>{
+  const rows=Array.from({length:20},()=>bar());
+  rows[1]=bar({open:111,high:112,low:94});
+  let result=evaluateStudyPath(rows,levels,20);
+  assert.equal(result.tp1,true);assert.equal(result.stopAfterTp1,true);assert.equal(result.stopBeforeTp1,false);assert.equal(result.ambiguous,false);
+  rows[1]=bar({high:112,low:94});result=evaluateStudyPath(rows,levels,20);
+  assert.equal(result.tp1,false);assert.equal(result.stopBeforeTp1,true);assert.equal(result.stopAfterTp1,false);assert.equal(result.ambiguous,true);
+  rows[1]=bar({low:94});rows[2]=bar({high:125});result=evaluateStudyPath(rows,levels,20);
+  assert.equal(result.tp1,false);assert.equal(result.tp2,false);assert.equal(result.stopBeforeTp1,true);
+});
+
+test('later TP1 and stops never change earlier horizon counts',()=>{
+  const {rows,guide}=achievementFixture();
+  rows[6]={...rows[6],high:112};rows[7]={...rows[7],low:94};
+  const summary=studySummary(buildSignalStudy(rows,guide));
+  assert.deepEqual(summary.results.map(r=>[r.pathCount,r.tp1Count,r.stopCount,r.stopAfterTp1Count]),[[1,0,0,0],[1,1,0,1],[1,1,0,1]]);
 });
 
 test('same-bar target and stop ambiguity remains conservative and incomplete horizons never enter the denominator',()=>{
@@ -99,13 +128,13 @@ test('achievement aggregation weights counts and reads legacy 20-bar paths witho
   a.signals=2;b.signals=8;
   for(const group of [a,b]){
     const count=group.signals;
-    Object.assign(group.horizons[20],{count,pathCount:count,tp1:group===a?0:8,tp2:group===a?0:4,stop:group===a?2:4,ambiguous:1});
+    Object.assign(group.horizons[20],{count,pathCount:count,tp1:group===a?0:4,tp2:group===a?0:2,stop:group===a?2:4,stopAfterTp1:group===a?0:2,ambiguous:1});
   }
   const summary=studySummary([a,b]).results[2];
-  assert.equal(summary.pathCount,10);assert.equal(summary.tp1Rate,80);assert.equal(summary.tp2Rate,40);assert.equal(summary.stopRate,60);assert.equal(summary.ambiguous,2);
+  assert.equal(summary.pathCount,10);assert.equal(summary.tp1Rate,40);assert.equal(summary.tp2Rate,20);assert.equal(summary.stopRate,60);assert.equal(summary.stopAfterTp1Count,2);assert.equal(summary.ambiguous,2);
   const {rows,guide}=achievementFixture();rows[3]={...rows[3],high:112};
   const legacy=buildSignalStudy(rows,guide)[0];
-  for(const horizon of [5,10,20])for(const key of ['pathCount','tp1','tp2','stop','ambiguous'])delete legacy.horizons[horizon][key];
+  for(const horizon of [5,10,20])for(const key of ['pathCount','tp1','tp2','stop','stopAfterTp1','ambiguous'])delete legacy.horizons[horizon][key];
   const old=studySummary([legacy]);assert.equal(old.results[0].count,1);assert.equal(old.results[0].pathCount,0);assert.equal(old.results[0].tp1Rate,null);
   assert.equal(old.results[2].pathCount,1);assert.equal(old.results[2].tp1Rate,100);assert.equal(old.results[2].stopRate,0);
 });
@@ -144,7 +173,7 @@ test('publisher aggregates sectors without publishing per-symbol historical rows
     events: [{ key: 'breakoutEntry', asOf: rows[1].asOf, close: 101 }] };
   const studies = buildSignalStudy(rows, guide);
   const item = { ...stock(), signalToolsVersion: 1, studies, alertHistory: [] };
-  const output = buildSignalTools({ signalToolsVersion: 1, collectedAt: '2026-11-15T09:00:00Z', items: [item, { ...item, symbol: '000660', status: 'stale' }] },
+  const output = buildSignalTools({ signalToolsVersion: 1, studyVersion: STUDY_VERSION, collectedAt: '2026-11-15T09:00:00Z', items: [item, { ...item, symbol: '000660', status: 'stale' }] },
     { items: [{ key: 'KR:005930', id: 'technology' }] });
   assert.equal(output.manifest.evaluatedCount, 1);
   assert.equal(output.manifest.failedCount, 1);
@@ -152,11 +181,15 @@ test('publisher aggregates sectors without publishing per-symbol historical rows
   assert.equal(output.manifest.signalCount, 1);
   assert.equal(output.shards.length, 32);
   assert.equal(output.study.groups[0].symbol, undefined);
-  const special = buildSignalTools({ signalToolsVersion: 1, collectedAt: '2026-11-15T09:00:00Z',
+  const special = buildSignalTools({ signalToolsVersion: 1, studyVersion: STUDY_VERSION, collectedAt: '2026-11-15T09:00:00Z',
     items: [item, { ...item, symbol: '123456', name: '테스트스팩' }] }, null);
   assert.equal(special.manifest.excludedCount, 1);
   assert.equal(special.manifest.signalCount, 1);
   assert.ok(special.shards.some(shard => shard.stocks['KR:123456']));
+  assert.equal(output.manifest.studyVersion,STUDY_VERSION);
+  assert.equal(validSignalManifest(output.manifest),true);
+  assert.equal(validSignalManifest({...output.manifest,studyVersion:2}),true);
+  for(const studyVersion of [undefined,1,2])assert.throws(()=>buildSignalTools({signalToolsVersion:1,studyVersion,collectedAt:'2026-11-15T09:00:00Z',items:[item]}),/complete recalculation/);
 });
 
 test('notification registration starts now, deduplicates signals, and read receipts never regress across tabs', () => {

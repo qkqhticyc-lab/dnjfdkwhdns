@@ -3,3 +3,11 @@ const fixture=()=>{const rows=Array.from({length:22},(_,i)=>({asOf:new Date(Date
 test('validation counts target paths, excludes ambiguous wins and respects missing intraday data',()=>{let{rows,guide}=fixture();let g=validateEntryMethods(rows,guide).groups[0];assert.equal(g.count,1);assert.equal(g.tp1,1);assert.equal(g.tp2,0);rows[1].low=94;g=validateEntryMethods(rows,guide).groups[0];assert.equal(g.stop,1);assert.equal(g.tp1,0);assert.equal(g.ambiguous,1);rows[1].gapBefore=true;g=validateEntryMethods(rows,guide).groups[0];assert.equal(g.count,0);assert.equal(g.excluded,1);});
 test('release-date forward tracking is separate; incomplete and provisional outcomes are not victories',()=>{const{rows,guide}=fixture();for(const [i,p]of rows.entries())p.asOf=new Date(Date.UTC(2026,10,26+i)).toISOString().slice(0,10);guide.frames=rows.map(p=>({...p,trade:{initialStop:95,tp1:107.5,tp2:112.5}}));guide.events[0].asOf=rows[0].asOf;let g=validateEntryMethods(rows,guide).groups[0];assert.equal(g.phase,'forward');assert.equal(g.count,1);rows[3].provisional=true;g=validateEntryMethods(rows,guide).groups[0];assert.equal(g.pending,1);assert.equal(g.count,0);});
 test('pyramid candidates have their own entry and management levels, not the original trade targets',()=>{const{rows,guide}=fixture();guide.events=[{key:'pyramid',asOf:rows[0].asOf,add:{stop:95,tp1:107.5,tp2:112.5}}];const g=validateEntryMethods(rows,guide).groups[0];assert.equal(g.type,'pyramid');assert.equal(g.tp1,1);});
+test('chart validation excludes later stops after TP1 without reducing completed samples',()=>{
+ const{rows,guide}=fixture();rows[2].low=94;
+ for(const key of ['breakoutEntry','pyramid']){
+  guide.events=[{key,asOf:rows[0].asOf,add:{stop:95,tp1:107.5,tp2:112.5}}];
+  const g=validateEntryMethods(rows,guide).groups[0];
+  assert.equal(g.count,1);assert.equal(g.tp1,1);assert.equal(g.stop,0);assert.equal(g.stopAfterTp1,1);assert.equal(g.stopRate,0);
+ }
+});

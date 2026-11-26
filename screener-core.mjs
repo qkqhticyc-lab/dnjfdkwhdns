@@ -6,7 +6,7 @@ import{liveDailyRows}from'./live-chart-core.mjs';
 import{entrySnapshot}from'./entry-snapshot.mjs';
 import { rankInputs } from './screener-rank.mjs';
 import { locationInputs } from './screener-location.mjs';
-import { buildSignalStudy } from './signal-study-core.mjs';
+import { buildSignalStudy, STUDY_VERSION } from './signal-study-core.mjs';
 import { signalEventHistory } from './signal-events.mjs';
 export const SCREEN_GROUPS=[{market:'KR',exchange:'KOSPI',label:'코스피'},{market:'KR',exchange:'KOSDAQ',label:'코스닥'},{market:'US',exchange:'NASDAQ',label:'나스닥'},{market:'US',exchange:'NYSE',label:'뉴욕'},{market:'US',exchange:'AMEX',label:'아멕스'},{market:'JP',exchange:'TOKYO',label:'도쿄'}];
 export const LIQUIDITY_LIMITS={KR:1e10,US:2e7,JP:1e9};
@@ -70,11 +70,11 @@ export async function collectScreener(fetcher=fetch,now=new Date(),previous,opti
   }catch(e){const prior=old.get(screenKey(s));results[i]=prior?{...prior,...s,status:'stale',error:String(e.message).slice(0,120)}:{...s,status:'unavailable',error:String(e.message).slice(0,120)};}
   done++;if(done%100===0)options.onProgress?.({shard,done,total:items.length});
  }}));
- return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,bounceRulesVersion:1,candidateRulesVersion:2,signalToolsVersion:options.signalTools?1:undefined,universeScope:universe.universeScope,universeCollectedAt:universe.collectedAt,collectedAt:now.toISOString(),timeframe:'daily',coverage:universe.coverage,shard,shards,items:results};
+ return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,bounceRulesVersion:1,candidateRulesVersion:2,signalToolsVersion:options.signalTools?1:undefined,studyVersion:options.signalTools?STUDY_VERSION:undefined,universeScope:universe.universeScope,universeCollectedAt:universe.collectedAt,collectedAt:now.toISOString(),timeframe:'daily',coverage:universe.coverage,shard,shards,items:results};
 }
 export function mergeScreenShards(universe,parts,count){
  if(parts.length!==count||new Set(parts.map(p=>p.shard)).size!==count)throw Error('Incomplete shards');const merged=new Map();
  for(const part of parts){if(part.rulesVersion!=='independent-v3'||part.patternRulesVersion!==1||part.bounceRulesVersion!==1||part.candidateRulesVersion!==2||part.universeCollectedAt!==universe.collectedAt||part.shards!==count||part.shard<0||part.shard>=count)throw Error('Mismatched scan');for(const p of part.items){const key=screenKey(p);if(merged.has(key)||shardFor(p,count)!==part.shard)throw Error('Duplicate or wrong-shard stock');merged.set(key,p);}}
  if(merged.size!==universe.items.length||universe.items.some(p=>!merged.has(screenKey(p))))throw Error('Incomplete universe');
- return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,bounceRulesVersion:1,candidateRulesVersion:2,signalToolsVersion:parts.every(part=>part.signalToolsVersion===1)?1:undefined,marketRegimes:universe.marketRegimes,universeScope:universe.universeScope,collectedAt:universe.collectedAt,completedAt:new Date().toISOString(),timeframe:'daily',coverage:universe.coverage,items:universe.items.map(p=>merged.get(screenKey(p)))};
+ return{schemaVersion:1,rulesVersion:'independent-v3',patternRulesVersion:1,bounceRulesVersion:1,candidateRulesVersion:2,signalToolsVersion:parts.every(part=>part.signalToolsVersion===1)?1:undefined,studyVersion:parts.every(part=>part.studyVersion===STUDY_VERSION)?STUDY_VERSION:undefined,marketRegimes:universe.marketRegimes,universeScope:universe.universeScope,collectedAt:universe.collectedAt,completedAt:new Date().toISOString(),timeframe:'daily',coverage:universe.coverage,items:universe.items.map(p=>merged.get(screenKey(p)))};
 }
