@@ -13,6 +13,8 @@ on:
       - 'strategy-core.mjs'
       - 'pattern-core.mjs'
       - 'oversold-core.mjs'
+      - 'support-bounce-core.mjs'
+      - 'pyramid-core.mjs'
       - 'rebound-candidate-core.mjs'
       - 'chart-guide-core.mjs'
       - 'technical-core.mjs'

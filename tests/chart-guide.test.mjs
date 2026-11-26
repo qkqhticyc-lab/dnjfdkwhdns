@@ -1,6 +1,11 @@
 import test from'node:test';import assert from'node:assert/strict';
 import{analyzeGuide}from'../chart-guide-core.mjs';
+import{wilderRSI,wilderRange}from'../technical-core.mjs';
 const bars=(count=230)=>Array.from({length:count},(_,i)=>({asOf:new Date(Date.UTC(2025,0,i+1)).toISOString(),open:100+i*.2,high:101+i*.2,low:99+i*.2,close:100+i*.2,volume:100}));
+test('incremental Wilder values match prefix calculations through missing OHLC and directional changes',()=>{
+ const rows=bars(250).map((p,i)=>{const close=100+Math.sin(i*.43)*12+i*.05;return{...p,open:close-.5,high:close+2,low:close-2,close};});rows[60].high=null;rows[61].low=null;
+ const guide=analyzeGuide(rows);for(let i=0;i<rows.length;i++){const prefix=rows.slice(0,i+1);assert.equal(guide.frames[i].rsi,wilderRSI(prefix.map(p=>p.close)));assert.equal(guide.frames[i].atr,wilderRange(prefix).atr);}
+});
 test('EMA seeded with SMA, all six averages warm up independently, flat RSI/ATR and insufficient history are explicit',()=>{
  const rows=bars(),d=analyzeGuide(rows);assert.equal(d.frames[6].ema8,null);assert.equal(d.frames[7].ema8,100.7);assert.ok(Math.abs(d.frames[8].ema8-(100.7+2/9*(101.6-100.7)))<1e-9);assert.equal(d.frames[98].sma100,null);assert.ok(Math.abs(d.frames[99].sma100-109.9)<1e-9);assert.equal(d.frames[198].sma200,null);assert.ok(Math.abs(d.frames[199].sma200-119.9)<1e-9);
  assert.deepEqual(analyzeGuide(rows.slice(0,70)).missingLines,['SMA 100','SMA 200']);assert.equal(analyzeGuide(rows.slice(0,20)).status,'insufficient');assert.equal(analyzeGuide(rows.map(r=>({...r,open:100,high:100,low:100,close:100}))).frames.at(-1).rsi,50);

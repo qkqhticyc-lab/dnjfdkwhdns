@@ -100,7 +100,7 @@ export function buildSignalStudy(rows, guide, regimeAt = () => 'unknown') {
     if (future[0].open <= initial.initialStop || future[0].open >= initial.tp1) { group.gapSkipped++; continue; }
     const levels = { stop: initial.initialStop, tp1: initial.tp1, tp2: initial.tp2 };
     for (const horizon of STUDY_HORIZONS) {
-      const result = evaluateStudyPath(future, levels, horizon, type === 'oversoldBounce' ? 8 : 20);
+      const result = evaluateStudyPath(future, levels, horizon, type === 'oversoldBounce' ? 8 : type === 'supportBounce' ? 12 : 20);
       if (!result) continue;
       const bucket = group.horizons[horizon];
       bucket.count++;

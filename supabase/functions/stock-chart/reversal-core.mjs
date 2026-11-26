@@ -25,21 +25,53 @@ export function analyzeReversal(rows){
 const lunch=(market,t,zone)=>{const m=minute(t,zone);return market==='HK'?m>=720&&m<780:market==='JP'?m>=690&&m<750:false;};
 export function aggregateFourHours(payload,{symbol,market,currency,timezone},now=new Date(),includeLive=false){
  const r=payload?.chart?.result?.[0],meta=r?.meta,q=r?.indicators?.quote?.[0];
- if(payload?.chart?.error||meta?.symbol?.toUpperCase()!==symbol.toUpperCase()||meta.currency!==currency||meta.exchangeTimezoneName!==timezone||meta.dataGranularity!=='30m'||!Array.isArray(r.timestamp)||r.timestamp.length>6000||!q)throw Error('Invalid intraday identity or interval');
+ const interval=meta?.dataGranularity==='30m'?1800:['1h','60m'].includes(meta?.dataGranularity)&&['KR','US'].includes(market)?3600:null;
+ if(payload?.chart?.error||meta?.symbol?.toUpperCase()!==symbol.toUpperCase()||meta.currency!==currency||meta.exchangeTimezoneName!==timezone||!interval||!Array.isArray(r.timestamp)||r.timestamp.length>6000||!q)throw Error('Invalid intraday identity or interval');
  const raw=Array.isArray(meta.tradingPeriods)?meta.tradingPeriods:meta.tradingPeriods?.regular;
  if(!Array.isArray(raw)||!finite(meta.regularMarketTime))throw Error('Session metadata unavailable');
- const sessions=[...new Map(raw.flat(3).filter(p=>p&&finite(p.start)&&finite(p.end)&&p.end>p.start&&p.end-p.start<86400).map(p=>[p.start,p])).values()].sort((a,b)=>a.start-b.start);
+ const delayedKrOpen=new Set(['2025-01-02','2025-11-13','2026-01-02','2026-11-19']);
+ const sessions=[...new Map(raw.flat(3).filter(p=>p&&finite(p.start)&&finite(p.end)&&p.end>p.start&&p.end-p.start<86400).map(p=>{
+  // KRX announced 10:00 opens on these sessions. Yahoo may leave an empty 09:00 slot in its metadata.
+  const adjusted=market==='KR'&&delayedKrOpen.has(localDate(p.start,timezone))&&minute(p.start,timezone)===540?{...p,start:p.start+3600}:p;
+  return[adjusted.start,adjusted];
+ })).values()].sort((a,b)=>a.start-b.start);
  if(!sessions.length)throw Error('No trading sessions');
  const cutoff=Math.min(now.getTime()/1000,meta.regularMarketTime),bars=new Map();
  for(const[i,time]of r.timestamp.entries()){if(!finite(time)||time>cutoff)continue;const open=q.open?.[i],high=q.high?.[i],low=q.low?.[i],close=q.close?.[i],volume=q.volume?.[i];if(![open,high,low,close].every(v=>finite(v)&&v>0)||high<Math.max(open,close,low)||low>Math.min(open,close,high))continue;bars.set(time,{open,high,low,close,volume:finite(volume)&&volume>=0?volume:null});}
- const all=[];let continuous=[],incomplete=0,inProgress=0,gapPending=false;
- for(const session of sessions){for(let start=session.start;start<session.end;start+=14400){const end=Math.min(start+14400,session.end),provisional=end>cutoff;if(provisional){if(start<cutoff)inProgress++;if(!includeLive||start>=cutoff)continue;}const slots=[];for(let t=start;t<end&&(!provisional||t<=cutoff);t+=1800)if(!lunch(market,t,timezone))slots.push(t);if(!slots.length)continue;
+ const all=[],schedule=[];let continuous=[],incomplete=0,inProgress=0,gapPending=false;
+ for(const session of sessions){for(let start=session.start;start<session.end;start+=14400){const end=Math.min(start+14400,session.end),provisional=end>cutoff;if(provisional){if(start<cutoff)inProgress++;if(!includeLive||start>=cutoff)continue;}const slots=[];for(let t=start;t<end&&(!provisional||t<=cutoff);t+=interval)if(!lunch(market,t,timezone))slots.push(t);if(!slots.length)continue;
+   schedule.push({start:new Date(start*1000).toISOString(),asOf:new Date(end*1000).toISOString()});
    if(slots.some(t=>!bars.has(t))){incomplete++;continuous=[];gapPending=true;continue;}
    const values=slots.map(t=>bars.get(t)),last=values.at(-1),row={asOf:new Date(end*1000).toISOString(),start:new Date(start*1000).toISOString(),open:values[0].open,high:Math.max(...values.map(p=>p.high)),low:Math.min(...values.map(p=>p.low)),close:last.close,volume:values.every(p=>p.volume!=null)?values.reduce((s,p)=>s+p.volume,0):null,durationMinutes:(end-start)/60,bucket:Math.floor((start-session.start)/14400),shortened:end-start<14400};
    if(gapPending){row.gapBefore=true;gapPending=false;}
    if(includeLive)Object.assign(row,{provisional,observedAt:new Date(Math.min(end,cutoff)*1000).toISOString()});all.push(row);continuous.push(row);
   }}
- return{bars:continuous,history:all,validBars:all.length,incomplete,inProgress,sessionStart:sessions.at(-1).start,sessionEnd:sessions.at(-1).end,sourceThrough:new Date(cutoff*1000).toISOString()};
+ return{bars:continuous,history:all,schedule,validBars:all.length,incomplete,inProgress,sessionStart:sessions.at(-1).start,sessionEnd:sessions.at(-1).end,sourceThrough:new Date(cutoff*1000).toISOString()};
+}
+// Use a complete wider-history bucket when a recent 30-minute bucket is missing.
+// Never split an hourly candle across a lunch break or invent missing OHLC/volume.
+export function mergeFourHourHistory(hourly,recent){
+ const schedule=new Map(),choices=[new Map(hourly?.history?.map(p=>[p.start,p])||[]),new Map(recent?.history?.map(p=>[p.start,p])||[])];
+ for(const source of [hourly,recent])for(const bucket of source?.schedule||[])schedule.set(bucket.start,bucket);
+ const history=[];let incomplete=0,gap=false,continuous=[];
+ for(const expected of [...schedule.values()].sort((a,b)=>a.start.localeCompare(b.start))){
+  const row=[choices[1].get(expected.start),choices[0].get(expected.start)].find(p=>p?.asOf===expected.asOf);
+  if(!row){incomplete++;gap=true;continue;}
+  const next={...row};delete next.gapBefore;if(gap){if(history.length)next.gapBefore=true;continuous=[];gap=false;}
+  next.sourceInterval=choices[1].get(expected.start)===row?'30m':'1h';history.push(next);continuous.push(next);
+ }
+ const newest=[hourly,recent].filter(Boolean).sort((a,b)=>Date.parse(b.sourceThrough)-Date.parse(a.sourceThrough))[0];
+ return{...newest,history,bars:continuous,validBars:history.length,incomplete,repaired:history.filter(p=>p.sourceInterval==='1h'&&recent?.schedule?.some(b=>b.start===p.start)).length,method:hourly?'session-anchored-4h-multiresolution':'session-anchored-4h'};
+}
+export async function collectFourHourHistory(request,fetcher=fetch,now=new Date(),includeLive=false){
+ for(const symbol of chartSymbols(request.market,request.symbol,request.exchange)){
+  const identity={symbol,market:request.market,currency:request.currency,timezone:request.timezone},get=async params=>{const u='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?'+new URLSearchParams({...params,includePrePost:'false'}),r=await fetcher(u,{headers:{'User-Agent':'Mozilla/5.0',Accept:'application/json'},signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error('Intraday HTTP '+r.status);const payload=await r.json(),interval=payload?.chart?.result?.[0]?.meta?.dataGranularity;if(params.interval==='60m'&&!['1h','60m'].includes(interval))throw Error('Wrong requested hourly interval');return aggregateFourHours(payload,identity,now,includeLive);};
+  const feeds=await Promise.allSettled([['KR','US'].includes(request.market)?get({range:'2y',interval:'60m'}):Promise.resolve(null),get({period1:String(Math.floor(now.getTime()/1000)-58*86400),period2:String(Math.floor(now.getTime()/1000)),interval:'30m'})]);
+  const hourly=feeds[0].status==='fulfilled'?feeds[0].value:null,recent=feeds[1].status==='fulfilled'?feeds[1].value:null;
+  if(!hourly&&!recent)continue;
+  const result=mergeFourHourHistory(hourly,recent);if(result.history.length)return{...result,source:'https://finance.yahoo.com/quote/'+encodeURIComponent(symbol)+'/chart/'};
+ }
+ throw Error('No complete four-hour history');
 }
 export async function collectReversals(own,fetcher=fetch,now=new Date()){
  const today=localDate(now.getTime()/1000,own.timezone),daily={...analyzeReversal(closedBars(own.bars,today).map(p=>({...p,asOf:p.date}))),guide:analyzeGuide(closedBars(own.bars,today).map(p=>({...p,asOf:p.date}))),timeframe:'1d',timezone:own.timezone,source:own.source,sourceName:'네이버페이 증권 일봉',collectedAt:now.toISOString()};let fourHour={status:'unavailable',timeframe:'4h',reason:'이 종목의 4시간봉 자료를 확인하지 못했습니다.',collectedAt:now.toISOString()};

@@ -30,8 +30,8 @@ try {
   const state = () => plot.evaluate(node => ({...node.dataset}));
   assert.equal(await page.locator('#chart-range-select').inputValue(), '1mo');
   assert.ok(Number((await state()).viewCount) < data.bars.length, 'initial four-hour window leaves older bars to pan into');
-  assert.equal(await page.locator('#chart-range-select option[value="6mo"]').textContent(), '전체 이력');
-  assert.equal(await page.locator('#chart-range-select option[value="3mo"]').isDisabled(), true);
+  assert.equal(await page.locator('#chart-range-select option[value="6mo"]').textContent(), '6개월');
+  assert.equal(await page.locator('#chart-range-select option[value="3mo"]').isDisabled(), false);
   const cdp = await page.context().newCDPSession(page);
   async function swipe(dx, dy=0) {
    const rect = await plot.boundingBox();
@@ -72,8 +72,8 @@ try {
   await swipe(65);
   assert.ok((await state()).viewStart < full.viewStart, 'four-hour swipe works in fullscreen');
   await page.locator('#chart-expand').tap();
-  await page.locator('#chart-range-select').selectOption('6mo');
-  assert.equal(Number((await state()).viewCount), data.bars.length, 'all-history option shows received bars');
+  await page.locator('#chart-range-select').selectOption('2y');
+  assert.equal(Number((await state()).viewCount), Math.min(1200,data.bars.length), 'two-year option shows received history within display limit');
   const rect = await plot.boundingBox();
   const x = rect.x + rect.width * .4;
   const y = rect.y + rect.height * .35;
