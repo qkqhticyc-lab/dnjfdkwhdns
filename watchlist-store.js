@@ -1,0 +1,5 @@
+import {WATCH_KEY} from './watchlist-core.mjs';
+import {parseWatchState} from './watch-groups-core.mjs';
+export function readWatchState(){let raw;try{raw=localStorage.getItem(WATCH_KEY);}catch{throw Error('브라우저 저장소에 접근하지 못했습니다. 저장 설정을 확인해 주세요.');}try{return parseWatchState(raw||undefined);}catch{throw Error('저장된 관심종목 형식을 읽지 못했습니다. 내보낸 파일이나 저장 상태를 확인해 주세요.');}}
+export function updateWatchState(change){const before=readWatchState(),next=change(before);if(next===before)return next;const safe=parseWatchState(JSON.stringify(next));try{localStorage.setItem(WATCH_KEY,JSON.stringify(safe));}catch{throw Error('관심종목을 저장하지 못했습니다. 브라우저 저장 공간이나 설정을 확인해 주세요.');}window.dispatchEvent(new CustomEvent('investment-watchlist-change',{detail:{items:safe.items}}));return safe;}
+export function onWatchStateChange(callback){const storage=e=>{if(e.key===WATCH_KEY)callback();};window.addEventListener('storage',storage);window.addEventListener('investment-watchlist-change',callback);return()=>{window.removeEventListener('storage',storage);window.removeEventListener('investment-watchlist-change',callback);};}

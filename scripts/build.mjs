@@ -56,6 +56,7 @@ for(const name of ['signal-study.json',...Array.from({length:ALERT_SHARDS},(_,in
  await writeFile('dist/data/'+name,JSON.stringify(payload));
 }
 await copyFile('notifications.css','dist/notifications.css');
+await copyFile('watchlist.css','dist/watchlist.css');
 let alertCalendar={schemaVersion:1,status:'unavailable',collectedAt:null,items:[]};
 try{alertCalendar=JSON.parse(await readFile('.cache/signal-tools/alert-calendar.json','utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
 if(alertCalendar.schemaVersion!==1||!Array.isArray(alertCalendar.items))throw Error('Invalid alert calendar');

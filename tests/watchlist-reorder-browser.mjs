@@ -50,9 +50,9 @@ try{
    const download=page.waitForEvent('download');await page.getByRole('button',{name:'내보내기',exact:true}).click();const file=await download;const stream=await file.createReadStream(),chunks=[];for await(const chunk of stream)chunks.push(chunk);assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString()).items.map(watchKey),before);
    const more=Array.from({length:30},(_,i)=>({market:'US',symbol:'TEST'+i,name:'Test '+i}));
    await page.locator('#chart-watch-import').setInputFiles({name:'watch.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({schemaVersion:1,items:more}))});await page.waitForFunction(()=>document.querySelectorAll('#chart-watch-list [data-watch-select]').length===39);
-   const head=await picks.first().boundingBox(),sidebar=page.locator('.chart-sidebar'),edge=await sidebar.boundingBox(),firstKey=(await order())[0];
+   const head=await picks.first().boundingBox(),sidebar=page.locator('#chart-watch-list'),edge=await sidebar.boundingBox(),firstKey=(await order())[0];
    await page.mouse.move(head.x+30,head.y+15);await page.mouse.down();await page.mouse.move(head.x+30,edge.y+edge.height-5,{steps:12});
-   await page.waitForFunction(()=>document.querySelector('.chart-sidebar').scrollTop>120);await page.mouse.up();assert.ok((await order()).indexOf(firstKey)>8);assert.deepEqual(await saved(),await order());
+   await page.waitForFunction(()=>document.querySelector('#chart-watch-list').scrollTop>120);await page.mouse.up();assert.ok((await order()).indexOf(firstKey)>8);assert.deepEqual(await saved(),await order());
    await sidebar.evaluate(n=>{n.scrollTop=0;});
   }
   // Drag suppression expires; a subsequent tap selects the intended stock.

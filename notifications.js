@@ -164,6 +164,7 @@ export function initNotifications() {
     }
   }
   function watchChanged(items = readWatchlist()) {
+    if(JSON.stringify(items)===JSON.stringify(watchlist))return;
     generation++; watchlist = items; state = syncNotificationWatchlist(state, watchlist); persist(); render(); refresh();
   }
   window.addEventListener('investment-watchlist-change', event => watchChanged(event.detail?.items || readWatchlist()));

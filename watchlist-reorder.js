@@ -16,7 +16,7 @@ export function initWatchlistReorder({list,onMove,announce}){
   s.row.classList.add('watch-dragging');document.body.classList.add('watch-reordering');
   preview=s.row.cloneNode(true);preview.className='chart-watch-row chart-watch-drag-preview';preview.removeAttribute('data-watch-row');
   preview.setAttribute('aria-hidden','true');preview.inert=true;preview.style.width=rect.width+'px';document.body.append(preview);
-  let host=list.parentElement;
+  let host=list;
   while(host&&host!==document.body){const style=getComputedStyle(host);if(/auto|scroll/.test(style.overflowY)&&host.scrollHeight>host.clientHeight)break;host=host.parentElement;}
   s.host=host&&host!==document.body?host:document.scrollingElement;
   announce('이동할 위치에 놓으세요. Esc 키로 취소할 수 있습니다.');update();animation=requestAnimationFrame(scroll);
