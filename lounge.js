@@ -1,3 +1,4 @@
+import {sectorStrength,sectorBenchmark} from './sector-strength-core.mjs';
 import {initUsMarketCalendar} from './us-market-calendar.js';
 import {loungeStocks,loungeTrend,loungeSectors} from './lounge-core.mjs';
 import {INDICATORS} from './quotes-core.mjs';
@@ -24,7 +25,7 @@ export async function initLounge(config){
   const params=new URLSearchParams(location.search),saved=params.get('market')||storage('lounge-market-v1');
   let market=saved==='US'?'US':'KR',view='new',data={},live,storedBusy=false,liveBusy=false;
   const sectorFeeds=new Map(),sectorPending=new Set();
-  const limits={signals:4,calendar:4,news:4,alerts:2};
+  const limits={signals:4,calendar:4,news:4,alerts:2,strength:3};
   const sources=['indicators','indicator-history','screener','sectors','news'],failures=new Set();
   const ids=()=>market==='KR'?['kospi','kosdaq']:['sp500','nasdaq'];
   const daily=id=>data.indicators?.items?.find(item=>item.id===id);
@@ -71,7 +72,23 @@ export async function initLounge(config){
     const m=market,old=sectorFeeds.get(m);if(sectorPending.has(m)||!force&&old&&Date.now()-Date.parse(old.collectedAt)<300000)return;
     sectorPending.add(m);
     try{const d=await json(config.supabase.url+'/functions/v1/market-sectors?market='+m,{apikey:config.supabase.publishableKey,Authorization:'Bearer '+config.supabase.edgeAnonKey});if(d.market!==m||!Array.isArray(d.sectors))throw Error();sectorFeeds.set(m,d);failures.delete('live-sectors');}
-    catch{failures.add('live-sectors');}finally{sectorPending.delete(m);if(m===market)renderSectorStrip();}
+    catch{failures.add('live-sectors');}finally{sectorPending.delete(m);if(m===market){renderSectorStrip();renderStrength();}}
+  }
+
+  function renderStrength(){
+    const host=$('lounge-strength-list'),snapshot=loungeStocks(data.screener?.items||[],market),benchmark=sectorBenchmark(daily(ids()[0]),market,snapshot.asOf),result=sectorStrength(snapshot.rows,classifications(),benchmark),feed=sectorFeeds.get(market);
+    host.replaceChildren();$('lounge-strength-map').href='./sector-map.html?market='+market;
+    $('lounge-strength-basis').textContent=(result.asOf||'기준일 확인 중')+' 마감 기준 · '+(market==='KR'?'코스피':'S&P 500')+' 대비 · 유동성 표본 '+result.measured+'/'+result.available+'종목'+(failures.has('screener')||failures.has('indicators')||failures.has('sectors')?' · 갱신 지연':'');
+    const relative=value=>Number.isFinite(value)?(value>0?'+':'')+value.toFixed(1)+'%p':'—';
+    for(const g of result.leaders.slice(0,limits.strength)){
+      const row=element('article',null,'strength-row'),head=element('div',null,'strength-row-head'),link=element('a',g.name);link.href='./sector-map.html?'+new URLSearchParams({market,sector:g.id});head.append(link,element('span',({leader:'주도',improving:'강세 전환',defensive:'상대 방어'})[g.state],'strength-state strength-'+g.state));if(g.heat)head.append(element('span','추격 주의','strength-heat'));row.append(head);
+      for(const[label,value,color]of [['5일 시장 대비',relative(g.relative[5]),tone(g.relative[5])],['20일 시장 대비',relative(g.relative[20]),tone(g.relative[20])],['20일선 위',g.breadth.toFixed(0)+'%',''],['거래 활성도',g.turnoverRatio==null?'—':g.turnoverRatio.toFixed(2)+'배','']]){const metric=element('div',null,'strength-metric');metric.append(element('small',label),element('strong',value,color));row.append(metric);}
+      const detail=element('p',g.count+'종목 · 20일 수익률 '+percent(g.returns[20])+' · 60일 시장 대비 '+relative(g.relative[60])+' · 최근 5봉 진입 '+g.recentSignals+'/'+g.count,'strength-detail');
+      const liveSector=feed?.sectors.find(s=>s.id===g.id&&s.status==='ok');if(feed?.marketStatus==='OPEN'&&liveSector)detail.append(element('span','장중 업종 '+percent(liveSector.changePercent)+' · '+stamp(liveSector.quoteAt||feed.collectedAt)+' KST','strength-live'));
+      row.append(detail);host.append(row);
+    }
+    if(!result.leaders.length)empty(host,!data.screener?'강세 업종 자료를 확인하고 있습니다.':!benchmark?'동일 마감일의 시장지수 자료를 기다리고 있습니다.':!result.measured?'강세 업종 분석 자료를 전체 종목에서 집계하고 있습니다.':'현재 기준에 맞는 강세 업종이 없습니다. 업종지도에서 전체 흐름을 확인하세요.');
+    more('strength',result.leaders.length);
   }
 
   function renderState(){
@@ -130,7 +147,7 @@ export async function initLounge(config){
 
   function draw(){
     for(const button of document.querySelectorAll('[data-lounge-market]'))button.setAttribute('aria-pressed',String(button.dataset.loungeMarket===market));
-    renderTape();renderState();renderSignals();renderCalendar();renderNews();renderAlerts();
+    renderTape();renderStrength();renderState();renderSignals();renderCalendar();renderNews();renderAlerts();
     $('lounge-status').textContent=failures.size?'일부 자료 갱신이 지연됩니다. 확인된 자료와 기준 시각을 유지합니다.':'지수는 30초마다 조회 · 진입 신호는 마감봉 · 일정·뉴스는 게시 자료 기준';
   }
   async function json(url,headers){const response=await fetch(url,{headers,cache:'no-store',signal:AbortSignal.timeout(20000)});if(!response.ok)throw Error('Data unavailable');const value=await response.json();if(value?.schemaVersion!==1)throw Error('Invalid dashboard data');return value;}
@@ -144,10 +161,10 @@ export async function initLounge(config){
     try{const value=await json(config.supabase.url+'/functions/v1/market-indicators',{apikey:config.supabase.publishableKey,Authorization:'Bearer '+config.supabase.edgeAnonKey});if(value.items?.length!==12)throw Error('Invalid indicator count');live=retainLiveItems(value,live);failures.delete('live');}catch{failures.add('live');if(live)live={...live,items:live.items.map(item=>({...item,status:item.status==='ok'?'stale':item.status}))};}
     liveBusy=false;$('lounge-refresh').disabled=storedBusy;draw();
   }
-  for(const button of document.querySelectorAll('[data-lounge-market]'))button.onclick=()=>{market=button.dataset.loungeMarket;limits.signals=4;try{localStorage.setItem('lounge-market-v1',market);}catch{}draw();loadSectors();};
+  for(const button of document.querySelectorAll('[data-lounge-market]'))button.onclick=()=>{market=button.dataset.loungeMarket;limits.signals=4;limits.strength=3;try{localStorage.setItem('lounge-market-v1',market);}catch{}draw();loadSectors();};
   for(const button of document.querySelectorAll('[data-lounge-state]'))button.onclick=()=>{view=button.dataset.loungeState;limits.signals=4;renderSignals();};
   $('lounge-type').onchange=()=>{limits.signals=4;renderSignals();renderState();};
-  for(const[key,render]of Object.entries({signals:renderSignals,calendar:renderCalendar,news:renderNews,alerts:renderAlerts}))$('lounge-'+key+'-more').onclick=()=>{limits[key]+=4;render();};
+  for(const[key,render]of Object.entries({strength:renderStrength,signals:renderSignals,calendar:renderCalendar,news:renderNews,alerts:renderAlerts}))$('lounge-'+key+'-more').onclick=()=>{limits[key]+=4;render();};
   $('lounge-open-alerts').onclick=event=>{event.stopPropagation();document.getElementById('notification-button')?.click();};
   $('lounge-refresh').onclick=()=>Promise.all([loadStored(),loadLive(),loadSectors(true),usCalendar.refresh()]);
   window.addEventListener('storage',event=>{if(event.key===NOTIFICATION_KEY)renderAlerts();});

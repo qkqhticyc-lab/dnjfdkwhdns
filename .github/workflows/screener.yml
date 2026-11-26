@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'screener-core.mjs'
+      - 'sector-strength-core.mjs'
       - 'screener-rank.mjs'
       - 'screener-location.mjs'
       - 'signal-study-core.mjs'
