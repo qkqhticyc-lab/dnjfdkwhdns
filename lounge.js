@@ -1,3 +1,4 @@
+import {initUsMarketCalendar} from './us-market-calendar.js';
 import {loungeStocks,loungeTrend,loungeSectors} from './lounge-core.mjs';
 import {INDICATORS} from './quotes-core.mjs';
 import {retainLiveItems} from './live-indicators-core.mjs';
@@ -19,6 +20,7 @@ const chartLink=item=>'./charts.html?'+new URLSearchParams({market:item.market,s
 function storage(key){try{return localStorage.getItem(key);}catch{return null;}}
 
 export async function initLounge(config){
+  const usCalendar=initUsMarketCalendar();
   const params=new URLSearchParams(location.search),saved=params.get('market')||storage('lounge-market-v1');
   let market=saved==='US'?'US':'KR',view='new',data={},live,storedBusy=false,liveBusy=false;
   const sectorFeeds=new Map(),sectorPending=new Set();
@@ -147,7 +149,7 @@ export async function initLounge(config){
   $('lounge-type').onchange=()=>{limits.signals=4;renderSignals();renderState();};
   for(const[key,render]of Object.entries({signals:renderSignals,calendar:renderCalendar,news:renderNews,alerts:renderAlerts}))$('lounge-'+key+'-more').onclick=()=>{limits[key]+=4;render();};
   $('lounge-open-alerts').onclick=event=>{event.stopPropagation();document.getElementById('notification-button')?.click();};
-  $('lounge-refresh').onclick=()=>Promise.all([loadStored(),loadLive(),loadSectors(true)]);
+  $('lounge-refresh').onclick=()=>Promise.all([loadStored(),loadLive(),loadSectors(true),usCalendar.refresh()]);
   window.addEventListener('storage',event=>{if(event.key===NOTIFICATION_KEY)renderAlerts();});
   window.addEventListener('investment-notifications-change',renderAlerts);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){loadLive();loadSectors();}});

@@ -1,0 +1,26 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync}from'node:fs';
+import {etInstant,calendarParts,calendarWindow,parseNyseCalendar,parseFomcCalendar,economicCalendarItems,earningsCalendarItems,mergeUsCalendarItems,calendarDays,validUsMarketCalendar,safeCalendarUrl}from'../us-market-calendar-core.mjs';
+test('Eastern times use seasonal offsets and Korean day boundaries; post-close view advances without a fixed week',()=>{
+ assert.equal(etInstant('2026-12-03','10:00'),'2026-12-03T15:00:00.000Z');assert.equal(etInstant('2026-07-01','10:00'),'2026-07-01T14:00:00.000Z');assert.deepEqual(calendarParts(etInstant('2026-12-03','10:00'),'Asia/Seoul'),{date:'2026-12-04',time:'00:00'});
+ assert.deepEqual(calendarWindow(Date.parse('2026-11-26T00:00Z')),{from:'2026-11-26',to:'2026-12-09'});assert.equal(calendarWindow(Date.parse('2026-11-30T15:00Z')).from,'2026-11-30');assert.equal(calendarWindow(Date.parse('2026-12-07T15:00Z')).from,'2026-12-07');assert.equal(calendarWindow(Date.parse('2026-12-07T15:00Z'),1).from,'2026-12-14');assert.throws(()=>etInstant('2026-03-08','02:30'));
+});
+test('NYSE table years and explicit early-close notes determine actual exchange sessions',()=>{
+ const names=["New Year's Day","Martin Luther King, Jr. Day","Washington's Birthday",'Good Friday','Memorial Day','Juneteenth National Independence Day','Independence Day','Labor Day','Thanksgiving Day','Christmas Day'];
+ const html='<table><tr><th>Holiday</th><th>2026</th><th>2027</th></tr>'+names.map((name,i)=>'<tr><th>'+name+'</th><td>Thursday, November '+(name==='Thanksgiving Day'?26:i+1)+'</td><td>Thursday, November '+(name==='Thanksgiving Day'?25:i+1)+'</td></tr>').join('')+'</table><p>Each market will close early at 1:00 p.m. (1:15 p.m. for eligible options) on Friday, November 27, 2026.</p>';
+ const items=parseNyseCalendar(html);assert.ok(items.find(p=>p.kind==='holiday'&&p.title.includes('추수감사절')&&p.date==='2026-11-26'));const early=items.find(p=>p.kind==='earlyClose');assert.equal(early.time,'13:00');assert.equal(early.scheduledAt,'2026-11-27T18:00:00.000Z');assert.throws(()=>parseNyseCalendar('<table>partial</table>'));
+});
+test('FOMC final meeting day, year and projection marker come from published meeting blocks',()=>{
+ const months=['January','March','April','June','July','September','October','December'];const html='2026 FOMC Meetings'+months.map(month=>'<div class="fomc-meeting__month"><strong>'+month+'</strong></div><div class="fomc-meeting__date">8-9'+(month==='December'?'*':'')+'</div>').join('');
+ const items=parseFomcCalendar(html),last=items.at(-1);assert.equal(last.date,'2026-12-09');assert.equal(last.time,'14:00');assert.ok(last.title.includes('점도표'));assert.equal(items.length,8);assert.throws(()=>parseFomcCalendar('No confirmed dates'));
+});
+test('economic releases group by actual Eastern date and merge employment and official FOMC without dropping forecast details',()=>{
+ const raw={id:'nfp',country:'USA',date:'2026-12-04',title:'비농업고용지수',code:'NFP',major:true,scheduledAt:'2026-12-04T13:30:00Z',url:'https://stock.naver.com/',actual:null,forecast:'150K',previous:'100K'};
+ const events=economicCalendarItems({status:'ok',items:[raw,{...raw,id:'unr',title:'실업률',code:'UNR'},{...raw,id:'pmi',date:'2026-12-04',title:'ISM 비제조업 구매자지수',code:'PMI',scheduledAt:'2026-12-03T15:00:00Z'},{...raw,country:'KOR'}]});assert.equal(events.length,3);assert.equal(events[2].date,'2026-12-03');assert.equal(events[2].time,'10:00');assert.equal(mergeUsCalendarItems(events).find(e=>e.family==='employment').details.length,2);
+ const official={id:'fed',date:'2026-12-09',time:'14:00',kind:'policy',family:'fomc',title:'FOMC · 점도표',url:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',source:'Federal Reserve'};const merged=mergeUsCalendarItems([{...official,id:'naver',source:'Npay 증권',details:[{forecast:'4.00'}]},official]);assert.equal(merged.length,1);assert.equal(merged[0].title,official.title);assert.equal(merged[0].details[0].forecast,'4.00');
+});
+test('earnings retain provider estimates and unknown times rather than inventing an exact announcement time',()=>{
+ const rows=earningsCalendarItems({items:[{symbol:'MRVL',name:'마벨',market:'US',period:'2026-07',upcoming:{period:'2026-10',announcedOn:'2026-12-01',time:'after-hours',epsForecast:.9,sourceUrl:'https://www.nasdaq.com/market-activity/stocks/mrvl/earnings'}}]});assert.equal(rows[0].timeLabel,'장후');assert.equal(rows[0].scheduledAt,null);assert.equal(rows[0].estimated,true);assert.equal(calendarDays({items:rows},{from:'2026-12-01',to:'2026-12-14'}).length,1);assert.equal(calendarDays({items:rows},{from:'2026-12-02',to:'2026-12-15'}).length,0);
+});
+test('verified seed remains useful without live feeds; unsafe links and invalid schema cannot publish',()=>{
+ const seed=JSON.parse(readFileSync(new URL('../data/us-calendar-official.json',import.meta.url),'utf8'));assert.ok(validUsMarketCalendar(seed));assert.ok(calendarDays(seed,{from:'2026-11-26',to:'2026-12-09'}).some(p=>p.date==='2026-12-09'));assert.equal(safeCalendarUrl('javascript:alert(1)'),null);assert.equal(safeCalendarUrl('https://www.nyse.com@evil.test/'),null);assert.equal(validUsMarketCalendar({...seed,items:[{...seed.items[0],date:'2026-02-31'}]}),false);
+});
