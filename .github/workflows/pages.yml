@@ -81,6 +81,7 @@ jobs:
           key: signal-tools-v1-${{ github.run_id }}
           restore-keys: signal-tools-v1-
       - run: node scripts/collect-signal-tools.mjs
+      - run: node scripts/collect-enhanced-study.mjs
       - run: node scripts/collect-alert-calendar.mjs
       - run: node scripts/collect-us-market-calendar.mjs
       - run: npm run collect:sentiment

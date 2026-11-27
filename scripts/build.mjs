@@ -81,5 +81,13 @@ const {validUsMarketCalendar}=await import('../us-market-calendar-core.mjs');
 let usCalendar;try{usCalendar=JSON.parse(await readFile('.cache/us-calendar/publish.json','utf8'));}catch(error){if(error.code!=='ENOENT')throw error;usCalendar=JSON.parse(await readFile('data/us-calendar-official.json','utf8'));}
 if(!validUsMarketCalendar(usCalendar))throw Error('Invalid US market calendar');
 await writeFile('dist/data/us-market-calendar.json',JSON.stringify(usCalendar));
+
+
+await mkdir('dist/data/enhanced-study',{recursive:true});
+let enhancedManifest={schemaVersion:1,studyVersion:1,status:'unavailable',parts:[]};
+try{enhancedManifest=JSON.parse(await readFile('.cache/enhanced-study/manifest.json','utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+for(const part of enhancedManifest.parts||[]){if(!/^(KR|US)-\d{4}-\d{2}\.json\.gz$/.test(part.url))throw Error('Invalid enhanced study file');await copyFile('.cache/enhanced-study/'+part.url,'dist/data/enhanced-study/'+part.url);}
+await writeFile('dist/data/enhanced-study/manifest.json',JSON.stringify(enhancedManifest));
+
 const version=await fingerprintAssets('dist');
 console.log('Built dist/. Assets '+version.revision+'. '+(config.supabase?.url?'Supabase configured.':'Hosting and database connection still required.'));
