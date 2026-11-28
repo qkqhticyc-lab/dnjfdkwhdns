@@ -2,7 +2,7 @@ import{ENTRY_KEYS,entryTrigger}from'./entry-types.mjs';
 import{evaluateStudyPath,netStudyReturn,STUDY_COSTS}from'./signal-study-core.mjs';
 import{signalVolumeInputs,typedVolumeAssessment}from'./screen-feature-inputs.mjs';
 import{rankScreenItem,rankInputs}from'./screener-rank.mjs';
-import{benchmarkId,entryReview,filterSettings,median,rankV2}from'./screener-v2-core.mjs';
+import{benchmarkId,entryReview,filterSettings,median,rankV2,liquidityMode}from'./screener-v2-core.mjs';
 export const ENHANCED_STUDY_VERSION=1;
 export const STUDY_FIELDS=['date','type','regime','signalPrice','open','stop','tp1','tp2','atr','average','median','signalRvol','volumeKnown','volumePass','strictKnown','strictPass','v1','partialV2','marketExcess20','gapPct','gapAtr','tp1R','tp2R','paths'];
 export const S=Object.fromEntries(STUDY_FIELDS.map((key,index)=>[key,index]));
@@ -22,11 +22,12 @@ export function buildEnhancedStudy(item,rows,guide,{benchmarks={},regimeAt=()=> 
  return output;
 }
 export function unsupportedHistorical(settings){
- const missing=[];if(settings.capEnabled)missing.push('발생 당시 시가총액');if(settings.rsTop>0)missing.push('당시 전체 시장 RS 백분위');if(settings.sectorMode!=='all'||settings.sectorLeaderStock)missing.push('당시 전체 구성 종목의 섹터 강도');if(settings.minScore>0&&settings.scoreVersion==='v2')missing.push('완전한 V2 점수');for(const k of['adr','spac','halted','clinical','event'])if(settings.risks[k])missing.push('당시 '+({adr:'ADR',spac:'SPAC',halted:'거래정지',clinical:'임상',event:'이벤트'})[k]+' 분류');return missing;
+ const missing=[];if(settings.commonVolume>0)missing.push('조회 시점 최근봉 상대 거래량');if(settings.preset!=='legacy'&&['standard','strict'].includes(liquidityMode(settings)))missing.push('기존 유동성 거래 발생일·목록 대체값의 과거 기록');if(settings.capEnabled)missing.push('발생 당시 시가총액');if(settings.rsTop>0)missing.push('당시 전체 시장 RS 백분위');if(settings.sectorMode!=='all'||settings.sectorLeaderStock)missing.push('당시 전체 구성 종목의 섹터 강도');if(settings.minScore>0&&settings.scoreVersion==='v2')missing.push('완전한 V2 점수');for(const k of['adr','spac','halted','clinical','event'])if(settings.risks[k])missing.push('당시 '+({adr:'ADR',spac:'SPAC',halted:'거래정지',clinical:'임상',event:'이벤트'})[k]+' 분류');return missing;
 }
 export function historicalMatch(r,market,settings,{supportedOnly=false}={}){
  if(settings.preset==='legacy')return true;if(!supportedOnly&&unsupportedHistorical(settings).length)return null;
  const floor=settings.limits[market];if(settings.liquidityEnabled&&(!(r[S.average]>=floor.average)||!(r[S.median]>=floor.median)))return false;
+ if(['standard','strict'].includes(liquidityMode(settings))){const min=(market==='KR'?1e10:2e7)*(liquidityMode(settings)==='strict'?2:1);if(!(r[S.average]>=min)||!(r[S.median]>=min/2))return false;}
  if(settings.typedVolume!=='off'){const strict=settings.typedVolume==='strict';if(!r[strict?S.strictKnown:S.volumeKnown])return null;if(!r[strict?S.strictPass:S.volumePass])return false;}
  if(settings.minScore>0&&settings.scoreVersion==='v1'&&!(r[S.v1]>=settings.minScore))return false;
  if(settings.risks.penny&&market==='US'&&r[S.open]<5)return false;

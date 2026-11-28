@@ -27,7 +27,7 @@ try{for(const width of [1440,390,320]){
  await choose('near');await page.locator('#screen-body .screen-location-cell summary').click();assert.match(await page.locator('#screen-body .screen-location-cell').textContent(),/진입가 대비.*ATR.*98\.00 USD.*추적 손절선.*95\.00 USD/);
  assert.match(await page.locator('#screen-body a').getAttribute('href'),/symbol=NEAR/);
  await page.locator('#screen-query').fill('missing');assert.equal(await page.locator('#screen-empty').isVisible(),true);await page.locator('#screen-query').fill('');
- await page.locator('#screen-volume').selectOption('2');assert.equal(await page.locator('#screen-body tr').count(),1);
+ await page.locator('#v2-settings>summary').click();await page.locator('[data-option=commonVolume]').selectOption('2');assert.equal(await page.locator('#screen-body tr').count(),1);
  await page.locator('#screen-query').fill('NEAR');await choose('all');assert.equal(await page.locator('#screen-body tr').count(),1);await page.locator('#screen-query').fill('');
  await page.locator('[data-value=reboundCandidate]').click();assert.equal(await chips.isVisible(),false);assert.equal(await page.locator('#screen-location-help').isVisible(),false);assert.equal(await page.locator('#screen-body tr').count(),1);
  await page.locator('[data-value=confirmed]').click();assert.equal(await chips.isVisible(),true);
