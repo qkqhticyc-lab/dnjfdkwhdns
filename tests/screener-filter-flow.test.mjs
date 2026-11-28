@@ -17,13 +17,14 @@ test('waterfall first failure counts sum exactly without counting a stock in sev
  const flow=runFilterFlow(rows,{settings,now,collectedAt,contextFor:p=>p.symbol==='RS'?null:contextFor(),rankFilters:{minScore:0},optionsFor:()=>({latestDate:'2026-11-25'})});
  assert.deepEqual(flow.rows.map(p=>p.symbol),['SCORE','PASS']);assert.deepEqual(flow.stages.map(s=>s.removed),[1,1,0,0,1,1,0]);assert.equal(flow.stages.reduce((n,s)=>n+s.removed,flow.rows.length),rows.length);assert.deepEqual([...flow.missing.keys()],['시가총액','종목 RS','진입 유형별 거래량']);
 });
-test('legacy basic, strict, fallback and no-limit selections keep old behavior; Japan is isolated in mixed-market scans',()=>{
+test('legacy selections remain stable; Japan participates in advanced presets and shared volume limits',()=>{
  const rows=[stock('A',{volumeRatio:2}),stock('B',{volumeRatio:2,liquidity:{average:3e7,median:1.5e7,activeDays:20}}),stock('F',{volumeRatio:2,liquidity:null,listTurnover:9e7}),stock('OLD',{asOf:'2026-10-01'}),stock('JP',{market:'JP',volumeRatio:1.2,liquidity:{average:1.5e9,median:8e8,activeDays:20}})];
  const legacy=runFilterFlow(rows,{settings:filterSettings(),now,collectedAt});const old=filterScreen(rows.filter(p=>now-Date.parse(p.asOf)<7*86400000),{liquidity:'standard'});assert.deepEqual(legacy.rows.map(p=>p.symbol),old.map(p=>p.symbol));
- for(const preset of['liquid','leaders','strict','custom']){const result=runFilterFlow(rows,{settings:filterSettings(preset),now,collectedAt,japanVolume:1});assert.equal(result.rows.filter(p=>p.market==='JP').length,1);assert.equal(runFilterFlow(rows,{settings:filterSettings(preset),now,collectedAt,japanVolume:1.5}).rows.filter(p=>p.market==='JP').length,0);}
- const strict=filterSettings('custom');strict.capEnabled=false;strict.typedVolume='off';strict.riskReview=false;strict.liquidityEnabled=false;strict.liquidityMode='strict';assert.deepEqual(runFilterFlow(rows,{settings:strict,now,collectedAt,japanLiquidity:'strict'}).rows.map(p=>p.symbol),['A','F']);
+ const jpy=stock('JP-READY',{market:'JP',currency:'JPY',volumeRatio:2,marketCap:{value:2e12,currency:'JPY'},liquidity:{average:1e10,median:5e9,activeDays:20}});for(const preset of['liquid','leaders','strict','custom']){const settings=filterSettings(preset);assert.equal(runFilterFlow([jpy],{settings,contextFor,now,collectedAt}).rows.length,1);settings.commonVolume=3;assert.equal(runFilterFlow([jpy],{settings,contextFor,now,collectedAt}).rows.length,0);}
+
+ const strict=filterSettings('custom');strict.capEnabled=false;strict.typedVolume='off';strict.riskReview=false;strict.liquidityEnabled=false;strict.liquidityMode='strict';assert.deepEqual(runFilterFlow(rows,{settings:strict,now,collectedAt,}).rows.map(p=>p.symbol),['A','F']);
  strict.liquidityMode='all';assert.ok(runFilterFlow(rows,{settings:strict,now,collectedAt}).rows.some(p=>p.symbol==='OLD'));
- assert.equal(runFilterFlow(rows,{settings:strict,now,collectedAt,japanLiquidity:'all',rankFilters:{turnoverLimits:{JP:2e9}}}).rows.filter(p=>p.market==='JP').length,0);
+ assert.equal(runFilterFlow(rows,{settings:strict,now,collectedAt,rankFilters:{turnoverLimits:{JP:2e9}}}).rows.filter(p=>p.market==='JP').length,1);
 });
 test('candidate bypass and missing-data behavior remain explicit, historical latest-volume is not fabricated',()=>{
  const p=stock('C',{marketCap:null,screenFeatures:null}),settings=filterSettings('strict');assert.equal(runFilterFlow([p],{settings,candidate:true,now,collectedAt}).rows.length,1);

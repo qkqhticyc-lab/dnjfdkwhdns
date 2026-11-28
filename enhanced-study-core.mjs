@@ -7,7 +7,7 @@ export const ENHANCED_STUDY_VERSION=1;
 export const STUDY_FIELDS=['date','type','regime','signalPrice','open','stop','tp1','tp2','atr','average','median','signalRvol','volumeKnown','volumePass','strictKnown','strictPass','v1','partialV2','marketExcess20','gapPct','gapAtr','tp1R','tp2R','paths'];
 export const S=Object.fromEntries(STUDY_FIELDS.map((key,index)=>[key,index]));
 export function buildEnhancedStudy(item,rows,guide,{benchmarks={},regimeAt=()=> 'unknown'}={}){
- if(!['KR','US'].includes(item.market))return[];
+ if(!['KR','US','JP'].includes(item.market))return[];
  const indexes=new Map(rows.map((p,i)=>[p.asOf,i])),output=[],benchmark=benchmarks[benchmarkId(item)],bench=new Map((benchmark?.points||[]).map(p=>[p.date,p.close]));
  for(const event of guide.events){
   if(!ENTRY_KEYS.includes(event.key)||event.provisional)continue;const i=indexes.get(event.asOf);if(i===undefined)continue;
@@ -27,7 +27,7 @@ export function unsupportedHistorical(settings){
 export function historicalMatch(r,market,settings,{supportedOnly=false}={}){
  if(settings.preset==='legacy')return true;if(!supportedOnly&&unsupportedHistorical(settings).length)return null;
  const floor=settings.limits[market];if(settings.liquidityEnabled&&(!(r[S.average]>=floor.average)||!(r[S.median]>=floor.median)))return false;
- if(['standard','strict'].includes(liquidityMode(settings))){const min=(market==='KR'?1e10:2e7)*(liquidityMode(settings)==='strict'?2:1);if(!(r[S.average]>=min)||!(r[S.median]>=min/2))return false;}
+ if(['standard','strict'].includes(liquidityMode(settings))){const min=(market==='KR'?1e10:market==='JP'?1e9:2e7)*(liquidityMode(settings)==='strict'?2:1);if(!(r[S.average]>=min)||!(r[S.median]>=min/2))return false;}
  if(!['off','score'].includes(settings.typedVolume)){const strict=settings.typedVolume==='strict';if(!r[strict?S.strictKnown:S.volumeKnown])return null;if(!r[strict?S.strictPass:S.volumePass])return false;}
  if(settings.minScore>0&&settings.scoreVersion==='v1'&&!(r[S.v1]>=settings.minScore))return false;
  if(settings.risks.penny&&market==='US'&&r[S.open]<5)return false;

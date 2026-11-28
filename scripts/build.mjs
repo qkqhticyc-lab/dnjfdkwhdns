@@ -86,7 +86,7 @@ await writeFile('dist/data/us-market-calendar.json',JSON.stringify(usCalendar));
 await mkdir('dist/data/enhanced-study',{recursive:true});
 let enhancedManifest={schemaVersion:1,studyVersion:1,status:'unavailable',parts:[]};
 try{enhancedManifest=JSON.parse(await readFile('.cache/enhanced-study/manifest.json','utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
-for(const part of enhancedManifest.parts||[]){if(!/^(KR|US)-\d{4}-\d{2}\.json\.gz$/.test(part.url))throw Error('Invalid enhanced study file');await copyFile('.cache/enhanced-study/'+part.url,'dist/data/enhanced-study/'+part.url);}
+for(const part of enhancedManifest.parts||[]){if(!/^(KR|US|JP)-\d{4}-\d{2}\.json\.gz$/.test(part.url))throw Error('Invalid enhanced study file');await copyFile('.cache/enhanced-study/'+part.url,'dist/data/enhanced-study/'+part.url);}
 await writeFile('dist/data/enhanced-study/manifest.json',JSON.stringify(enhancedManifest));
 
 const version=await fingerprintAssets('dist');

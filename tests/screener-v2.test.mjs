@@ -5,8 +5,8 @@ import{buildEnhancedStudy,summarizeEnhanced,S,unsupportedHistorical}from'../enha
 import{parseKoreanProfile,collectStockProfile}from'../stock-profile-core.mjs';
 const stock=(extra={})=>({market:'US',symbol:'TEST',currency:'USD',group:'NASDAQ',name:'Test',status:'ok',asOf:'2026-11-25',collectedAt:'2026-11-25T22:00:00Z',price:100,rankInputs:{shortAligned:true,mediumAligned:true},liquidity:{average:1e8,median:5e7,activeDays:20,last:1e8},marketCap:{value:5e9,currency:'USD'},signal:{status:'active',age:0,entry:100,initialStop:95,tp1:110,tp2:120},locationInputs:{atr:4},screenFeatures:{signalVolume:{type:'breakout',ratio:2,regularRatio:2}},...extra});
 const now=Date.parse('2026-11-26T00:00:00Z');
-test('legacy and Japan keep their exact selection; absent cap and turnover median are never estimated',()=>{
- const p=stock({marketCap:null,liquidity:{average:1e10}});assert.equal(applyV2Filters(p,null,filterSettings(),{now}).pass,true);assert.equal(applyV2Filters({...p,market:'JP'},null,filterSettings('strict'),{now}).pass,true);
+test('legacy keeps its selection and Japan now uses explicit preset conditions; missing cap and median are never estimated',()=>{
+ const p=stock({marketCap:null,liquidity:{average:1e10}});assert.equal(applyV2Filters(p,null,filterSettings(),{now}).pass,true);assert.equal(applyV2Filters({...p,market:'JP'},null,filterSettings('strict'),{now}).pass,false);
  const r=applyV2Filters(p,null,filterSettings('liquid'),{now});assert.ok(r.missing.includes('시가총액'));assert.ok(r.missing.includes('거래대금 중앙값'));
  assert.equal(listingFacts({marketValue:'999999999',marketValueRaw:null},'US').marketCap,null);
  assert.equal(listingFacts({marketValueRaw:'2,500,000,000',localTradedAt:'date'},'US').marketCap.value,2.5e9);

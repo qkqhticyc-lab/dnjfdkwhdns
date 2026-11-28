@@ -4,9 +4,9 @@ import{applyV2Filters,rankV2,filterSettings,liquidityMode}from'./screener-v2-cor
 export{liquidityMode}from'./screener-v2-core.mjs';
 
 export const FLOW_STAGES=[['liquidity','유동성'],['stockRS','종목 RS'],['sectorStrength','섹터 강도'],['sectorRS','섹터 내 상대강도'],['volume','거래량'],['riskReward','손익비'],['other','점수·위험']];
-export function legacyScope(item,{candidate=false}={}){return item.market==='JP'||candidate;}
-export function runFilterFlow(rows,{settings=filterSettings(),contextFor=()=>null,optionsFor=()=>({}),japanLiquidity='standard',japanVolume=0,candidateLiquidity='standard',candidateVolume=0,candidate=false,rankFilters={},collectedAt,now=Date.now()}={}){
- const evaluated=rows.map(item=>{const legacy=legacyScope(item,{candidate}),mode=legacy?(candidate?candidateLiquidity:japanLiquidity):liquidityMode(settings),volume=legacy?(candidate?candidateVolume:japanVolume):settings.commonVolume||0,c=contextFor(item),result=legacy?{pass:true,missing:[],checks:[]}:applyV2Filters(item,c,settings,{...optionsFor(item),now});return{item,result,legacy,mode,volume,context:c};});
+export function legacyScope(item,{candidate=false}={}){return candidate;}
+export function runFilterFlow(rows,{settings=filterSettings(),contextFor=()=>null,optionsFor=()=>({}),candidateLiquidity='standard',candidateVolume=0,candidate=false,rankFilters={},collectedAt,now=Date.now()}={}){
+ const evaluated=rows.map(item=>{const legacy=legacyScope(item,{candidate}),mode=legacy?candidateLiquidity:liquidityMode(settings),volume=legacy?candidateVolume:settings.commonVolume||0,c=contextFor(item),result=legacy?{pass:true,missing:[],checks:[]}:applyV2Filters(item,c,settings,{...optionsFor(item),now});return{item,result,legacy,mode,volume,context:c};});
  let selected=evaluated;const stages=[],missing=new Map(),incomparable=new Map();
  for(const[id,label]of FLOW_STAGES){const before=selected.length,diagnostics={unmet:0,missing:0,incomparable:0},volumeStates={pass:0,fail:0,missing:0,incomparable:0};selected=selected.filter(p=>{
   const{item,result,mode,volume}=p,checks=result.checks.filter(c=>c.stage===id),failures=checks.filter(c=>!c.pass),check=(pass,reason,known=true,status)=>{if(!pass)failures.push({reason,known,status});};
