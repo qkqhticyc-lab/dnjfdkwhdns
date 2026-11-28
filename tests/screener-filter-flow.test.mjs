@@ -23,6 +23,7 @@ test('legacy basic, strict, fallback and no-limit selections keep old behavior; 
  for(const preset of['liquid','leaders','strict','custom']){const result=runFilterFlow(rows,{settings:filterSettings(preset),now,collectedAt,japanVolume:1});assert.equal(result.rows.filter(p=>p.market==='JP').length,1);assert.equal(runFilterFlow(rows,{settings:filterSettings(preset),now,collectedAt,japanVolume:1.5}).rows.filter(p=>p.market==='JP').length,0);}
  const strict=filterSettings('custom');strict.capEnabled=false;strict.typedVolume='off';strict.riskReview=false;strict.liquidityEnabled=false;strict.liquidityMode='strict';assert.deepEqual(runFilterFlow(rows,{settings:strict,now,collectedAt,japanLiquidity:'strict'}).rows.map(p=>p.symbol),['A','F']);
  strict.liquidityMode='all';assert.ok(runFilterFlow(rows,{settings:strict,now,collectedAt}).rows.some(p=>p.symbol==='OLD'));
+ assert.equal(runFilterFlow(rows,{settings:strict,now,collectedAt,japanLiquidity:'all',rankFilters:{turnoverLimits:{JP:2e9}}}).rows.filter(p=>p.market==='JP').length,0);
 });
 test('candidate bypass and missing-data behavior remain explicit, historical latest-volume is not fabricated',()=>{
  const p=stock('C',{marketCap:null,screenFeatures:null}),settings=filterSettings('strict');assert.equal(runFilterFlow([p],{settings,candidate:true,now,collectedAt}).rows.length,1);

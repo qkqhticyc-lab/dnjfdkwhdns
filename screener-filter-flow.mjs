@@ -14,7 +14,7 @@ export function runFilterFlow(rows,{settings=filterSettings(),contextFor=()=>nul
    if(['standard','strict'].includes(mode))pass=pass&&passesLiquidity(item,mode);
    if(mode!=='all'&&collectedAt)pass=pass&&Date.parse(collectedAt)-Date.parse(item.asOf)<7*86400000;
    // Additional legacy floors belong to this stage, and are disabled by the explicit no-limit choice.
-   if(mode!=='all')pass=pass&&passesRankFilters(item,{turnoverLimits:rankFilters.turnoverLimits});
+   if(mode!=='all'||p.legacy)pass=pass&&passesRankFilters(item,{turnoverLimits:rankFilters.turnoverLimits});
   }
   if(id==='volume'&&volume>0)pass=pass&&Number.isFinite(item.volumeRatio)&&item.volumeRatio>=volume;
   if(id==='other')pass=pass&&passesRankFilters(item,{minScore:rankFilters.minScore,maxGap:rankFilters.maxGap});
