@@ -1,15 +1,16 @@
 import{sectorStrengthInputs,sectorStrength}from'./sector-strength-core.mjs';
 import{rankScreenItem}from'./screener-rank.mjs';
 import{typedVolumeAssessment}from'./screen-feature-inputs.mjs';
-export const FILTER_VERSION=2;
+export const FILTER_VERSION=3;
 export const PRESET_LABELS={legacy:'기존형',liquid:'유동성 우선',leaders:'주도주 우선',strict:'엄격 선별',custom:'사용자 설정'};
+export const FILTER_COMPARISON_LABELS={...PRESET_LABELS,leadersPrevious:'주도주 우선 · 변경 전'};
 export const NEW_LIQUIDITY={KR:{basic:{cap:3e11,average:2e10,median:1e10},strict:{cap:1e12,average:5e10,median:2.5e10}},US:{basic:{cap:2e9,average:5e7,median:2.5e7},strict:{cap:1e10,average:1e8,median:5e7}}};
 export function liquidityMode(settings){return settings.preset==='legacy'?'standard':settings.liquidityMode==='custom'&&!settings.liquidityEnabled?'all':settings.liquidityMode|| (settings.liquidityEnabled?'custom':'all');}
 const positive=v=>Number.isFinite(v)&&v>0;
 export const median=a=>{const v=a.filter(Number.isFinite).sort((a,b)=>a-b);return v.length?(v[(v.length-1)>>1]+v[v.length>>1])/2:null;};
 export function filterSettings(preset='legacy'){
- const strict=preset==='strict',active=preset!=='legacy';
- return{version:2,preset,scoreVersion:active?'v2':'v1',strict,capEnabled:active,liquidityEnabled:active,liquidityMode:active?'custom':'standard',commonVolume:0,limits:structuredClone(Object.fromEntries(Object.entries(NEW_LIQUIDITY).map(([m,x])=>[m,x[strict?'strict':'basic']]))),rsTop:['leaders','strict'].includes(preset)?strict?20:30:0,sectorMode:['leaders','strict'].includes(preset)?'leaders':'all',sectorLeaderStock:['leaders','strict'].includes(preset),typedVolume:active?strict?'strict':'basic':'off',riskReview:active,minTp1R:1,minTp2R:strict?2:1.5,maxUpGap:strict?1:2,maxUpAtr:0,minScore:0,risks:{penny:false,spac:false,halted:false,adr:false,clinical:false,event:false,unknown:false},eventDays:3};
+ const strict=preset==='strict',active=preset!=='legacy',leaders=preset==='leaders',previous=preset==='leadersPrevious';
+ return{version:FILTER_VERSION,preset,scoreVersion:active?'v2':'v1',strict,capEnabled:active,liquidityEnabled:active,liquidityMode:active?'custom':'standard',commonVolume:0,limits:structuredClone(Object.fromEntries(Object.entries(NEW_LIQUIDITY).map(([m,x])=>[m,x[strict?'strict':'basic']]))),rsTop:strict?20:leaders||previous?30:0,sectorMode:strict||previous?'leaders':leaders?'50':'all',sectorLeaderStock:strict||previous,sectorStockBonus:leaders,typedVolume:active?strict?'strict':leaders?'score':'basic':'off',riskReview:active,minTp1R:1,minTp2R:strict?2:1.5,maxUpGap:strict?1:2,maxUpAtr:0,minScore:0,risks:{penny:strict,spac:strict,halted:strict,adr:false,clinical:false,event:false,unknown:false},eventDays:3};
 }
 export function benchmarkId(p){return p.market==='US'?'SPY':p.market==='KR'?/KOSDAQ|코스닥/i.test(p.group||p.exchange)?'KOSDAQ':/KOSPI|코스피/i.test(p.group||p.exchange)?'KOSPI':null:null;}
 export function percentiles(entries,minCount=20){
@@ -60,7 +61,10 @@ export function rankV2(item,context,settings=filterSettings('liquid')){
   {label:'거래대금',max:10,known:turnover!==null,points:turnover>=5?10:turnover>=2?8:turnover>=1?6:0,detail:turnover===null?'자료 부족':'기본형 하한의 '+turnover.toFixed(2)+'배'},
   {label:'유형별 신호봉 거래량',max:15,known:volume.known,points:volume.pass?strictVolume.pass?15:12:0,detail:volume.reason},
   {label:'종목 RS',max:20,known:Number.isFinite(rs),points:Number.isFinite(rs)?Math.floor(rs*.2*10)/10:0,detail:Number.isFinite(rs)?'20일 RS '+rs.toFixed(1)+'백분위':'동일 기간 시장 비교 자료 부족'},
-  {label:'섹터 상대강도',max:10,known:Number.isFinite(sector?.score),points:Number.isFinite(sector?.score)?Math.floor(sector.score)/10:0,detail:Number.isFinite(sector?.score)?'전체 구성 종목 기반 강도 '+sector.score.toFixed(1):'섹터 자료 부족'},
+  ...(settings.sectorStockBonus?[
+   {label:'섹터 상대강도',max:5,known:Number.isFinite(sector?.score),points:Number.isFinite(sector?.score)?Math.floor(sector.score)/20:0,detail:Number.isFinite(sector?.score)?'전체 구성 종목 기반 강도 '+sector.score.toFixed(1):'섹터 자료 부족'},
+   {label:'섹터 내 상대강도 가점',max:5,known:Number.isFinite(context?.rs?.windows[20]?.sectorExcess),points:Number.isFinite(context?.rs?.windows[20]?.sectorExcess)&&context.rs.windows[20].sectorExcess>=0?5:0,detail:Number.isFinite(context?.rs?.windows[20]?.sectorExcess)?'섹터 대비 20일 '+context.rs.windows[20].sectorExcess.toFixed(2)+'%p · 0%p 이상 5점':'섹터 대비 수익률 자료 부족 · 0점'},
+  ]:[{label:'섹터 상대강도',max:10,known:Number.isFinite(sector?.score),points:Number.isFinite(sector?.score)?Math.floor(sector.score)/10:0,detail:Number.isFinite(sector?.score)?'전체 구성 종목 기반 강도 '+sector.score.toFixed(1):'섹터 자료 부족'}]),
  ].map(c=>({...c,points:c.known?c.points:0}));
  return{version:2,score:Math.round(components.reduce((s,c)=>s+c.points,0)*10)/10,knownMax:components.filter(c=>c.known).reduce((s,c)=>s+c.max,0),components,gapPct:gap,v1:rankScreenItem(item)?.score??null};
 }
@@ -70,15 +74,15 @@ export function riskFacts(item,sector,earnings,settings,now=Date.now()){
  return{penny:item.market==='US'&&Number.isFinite(item.price)?item.price<5:false,spac:/스팩|기업인수목적|\bSPAC\b/i.test(name)?true:null,halted:item.listingRisk?.tradable===false?true:item.listingRisk?.tradable===true&&Number.isFinite(item.liquidity?.activeDays)?item.liquidity.activeDays<15:null,adr:/\bADR\b|예탁증서|American Depositary/i.test(name)?true:null,clinical:typeof item.riskClassification?.clinicalDependent==='boolean'?item.riskClassification.clinicalDependent:null,clinicalIndustry:/바이오|생명공학|biotech/i.test(sector?.industry||''),event,eventDates:events};
 }
 export function applyV2Filters(item,context,settings,{latestDate,earnings,sector,now=Date.now()}={}){
- if(settings.preset==='legacy'||item.market==='JP')return{pass:true,reasons:[],missing:[],checks:[]};const reasons=[],missing=[],checks=[],limits=settings.limits[item.market];let stage='liquidity';const require=(ok,reason,known=true)=>{checks.push({stage,pass:!!ok,reason,known});if(!ok){reasons.push(reason);if(!known)missing.push(reason);}};
+ if(settings.preset==='legacy'||item.market==='JP')return{pass:true,reasons:[],missing:[],incomparable:[],checks:[]};const reasons=[],missing=[],incomparable=[],checks=[],limits=settings.limits[item.market];let stage='liquidity';const require=(ok,reason,known=true,status)=>{checks.push({stage,pass:!!ok,reason,known,status});if(!ok){reasons.push(reason);if(status==='incomparable')incomparable.push(reason);else if(!known)missing.push(reason);}};
  if(settings.liquidityEnabled){require(Number.isFinite(item.liquidity?.average)&&item.liquidity.average>=limits.average,'평균 거래대금',Number.isFinite(item.liquidity?.average));require(Number.isFinite(item.liquidity?.median)&&item.liquidity.median>=limits.median,'거래대금 중앙값',Number.isFinite(item.liquidity?.median));}
  if(settings.capEnabled)require(positive(item.marketCap?.value)&&item.marketCap.currency===item.currency&&item.marketCap.value>=limits.cap,'시가총액',positive(item.marketCap?.value)&&item.marketCap.currency===item.currency);
- stage='relative';if(settings.rsTop>0)require(Number.isFinite(context?.rs?.windows[20]?.percentile)&&context.rs.windows[20].percentile>=100-settings.rsTop,'종목 RS',Number.isFinite(context?.rs?.windows[20]?.percentile));
- if(settings.sectorMode!=='all'){const g=context?.sector;require(settings.sectorMode==='leaders'?['leader','improving'].includes(g?.state):Number.isFinite(g?.percentile)&&g.percentile>=100-Number(settings.sectorMode),'섹터 강도',Number.isFinite(g?.score));}
- if(settings.sectorLeaderStock)require(Number.isFinite(context?.rs?.windows[20]?.sectorExcess)&&context.rs.windows[20].sectorExcess>=0,'섹터 내 소외 종목',Number.isFinite(context?.rs?.windows[20]?.sectorExcess));
- stage='volume';if(settings.typedVolume!=='off'){const v=typedVolumeAssessment(item.screenFeatures?.signalVolume,settings.typedVolume==='strict');require(v.pass,'진입 유형별 거래량',v.known);}
+ stage='stockRS';if(settings.rsTop>0)require(Number.isFinite(context?.rs?.windows[20]?.percentile)&&context.rs.windows[20].percentile>=100-settings.rsTop,'종목 RS',Number.isFinite(context?.rs?.windows[20]?.percentile));
+ stage='sectorStrength';if(settings.sectorMode!=='all'){const g=context?.sector;require(settings.sectorMode==='leaders'?['leader','improving'].includes(g?.state):Number.isFinite(g?.percentile)&&g.percentile>=100-Number(settings.sectorMode),'섹터 강도',Number.isFinite(g?.score)&&Number.isFinite(g?.percentile));}
+ stage='sectorRS';if(settings.sectorLeaderStock)require(Number.isFinite(context?.rs?.windows[20]?.sectorExcess)&&context.rs.windows[20].sectorExcess>=0,'섹터 내 소외 종목',Number.isFinite(context?.rs?.windows[20]?.sectorExcess));
+ const volume=typedVolumeAssessment(item.screenFeatures?.signalVolume,settings.typedVolume==='strict');stage='volume';if(!['off','score'].includes(settings.typedVolume))require(volume.pass,'진입 유형별 거래량',volume.known,volume.status);
  stage='other';const rank=rankV2(item,context,settings);if(settings.minScore>0){const chosen=settings.scoreVersion==='v1'?rankScreenItem(item):rank;require(chosen?.score>=settings.minScore,settings.scoreVersion.toUpperCase()+' 점수',!!chosen);}
  stage='riskReward';const review=entryReview(item,settings,{latestDate,now});if(settings.riskReview)require(review.status==='review','현재 손익비·진입 부담',review.known&&!review.stale);
  stage='other';const risk=riskFacts(item,sector,earnings,settings,now);for(const key of['penny','spac','halted','adr','clinical','event'])if(settings.risks[key])require(risk[key]!==true&&(!settings.risks.unknown||risk[key]!==null),'특수 위험 '+key,risk[key]!==null);
- return{pass:!reasons.length,reasons,missing,checks,rank,review,risk};
+ return{pass:!reasons.length,reasons,missing,incomparable,checks,rank,review,risk,volume};
 }

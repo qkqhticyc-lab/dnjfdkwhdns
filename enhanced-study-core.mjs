@@ -28,7 +28,7 @@ export function historicalMatch(r,market,settings,{supportedOnly=false}={}){
  if(settings.preset==='legacy')return true;if(!supportedOnly&&unsupportedHistorical(settings).length)return null;
  const floor=settings.limits[market];if(settings.liquidityEnabled&&(!(r[S.average]>=floor.average)||!(r[S.median]>=floor.median)))return false;
  if(['standard','strict'].includes(liquidityMode(settings))){const min=(market==='KR'?1e10:2e7)*(liquidityMode(settings)==='strict'?2:1);if(!(r[S.average]>=min)||!(r[S.median]>=min/2))return false;}
- if(settings.typedVolume!=='off'){const strict=settings.typedVolume==='strict';if(!r[strict?S.strictKnown:S.volumeKnown])return null;if(!r[strict?S.strictPass:S.volumePass])return false;}
+ if(!['off','score'].includes(settings.typedVolume)){const strict=settings.typedVolume==='strict';if(!r[strict?S.strictKnown:S.volumeKnown])return null;if(!r[strict?S.strictPass:S.volumePass])return false;}
  if(settings.minScore>0&&settings.scoreVersion==='v1'&&!(r[S.v1]>=settings.minScore))return false;
  if(settings.risks.penny&&market==='US'&&r[S.open]<5)return false;
  if(settings.riskReview&&(!(r[S.tp1R]>=settings.minTp1R)||!(r[S.tp2R]>=settings.minTp2R)||r[S.gapPct]>settings.maxUpGap||settings.maxUpAtr>0&&(!Number.isFinite(r[S.gapAtr])||r[S.gapAtr]>settings.maxUpAtr)))return false;

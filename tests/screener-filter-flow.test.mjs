@@ -13,9 +13,9 @@ test('presets use signal volume with no hidden common RVOL or old liquidity floo
  const small=stock('SMALL',{liquidity:{average:100,median:50,activeDays:1}});settings.commonVolume=0;settings.liquidityEnabled=false;settings.liquidityMode='all';settings.capEnabled=false;assert.equal(runFilterFlow([small],{settings,now,collectedAt,rankFilters:{turnoverLimits:{US:1e10}}}).rows.length,1);
 });
 test('waterfall first failure counts sum exactly without counting a stock in several stages',()=>{
- const settings=filterSettings('leaders'),rows=[stock('LIQ',{marketCap:null,screenFeatures:null}),stock('RS'),stock('VOL',{screenFeatures:null}),stock('RR',{price:111}),stock('SCORE'),stock('PASS')];settings.minScore=50;
+ const settings=filterSettings('leadersPrevious'),rows=[stock('LIQ',{marketCap:null,screenFeatures:null}),stock('RS'),stock('VOL',{screenFeatures:null}),stock('RR',{price:111}),stock('SCORE'),stock('PASS')];settings.minScore=50;
  const flow=runFilterFlow(rows,{settings,now,collectedAt,contextFor:p=>p.symbol==='RS'?null:contextFor(),rankFilters:{minScore:0},optionsFor:()=>({latestDate:'2026-11-25'})});
- assert.deepEqual(flow.rows.map(p=>p.symbol),['SCORE','PASS']);assert.deepEqual(flow.stages.map(s=>s.removed),[1,1,1,1,0]);assert.equal(flow.stages.reduce((n,s)=>n+s.removed,flow.rows.length),rows.length);assert.deepEqual([...flow.missing.keys()],['시가총액','종목 RS','섹터 강도','섹터 내 소외 종목','진입 유형별 거래량']);
+ assert.deepEqual(flow.rows.map(p=>p.symbol),['SCORE','PASS']);assert.deepEqual(flow.stages.map(s=>s.removed),[1,1,0,0,1,1,0]);assert.equal(flow.stages.reduce((n,s)=>n+s.removed,flow.rows.length),rows.length);assert.deepEqual([...flow.missing.keys()],['시가총액','종목 RS','진입 유형별 거래량']);
 });
 test('legacy basic, strict, fallback and no-limit selections keep old behavior; Japan is isolated in mixed-market scans',()=>{
  const rows=[stock('A',{volumeRatio:2}),stock('B',{volumeRatio:2,liquidity:{average:3e7,median:1.5e7,activeDays:20}}),stock('F',{volumeRatio:2,liquidity:null,listTurnover:9e7}),stock('OLD',{asOf:'2026-10-01'}),stock('JP',{market:'JP',volumeRatio:1.2,liquidity:{average:1.5e9,median:8e8,activeDays:20}})];
